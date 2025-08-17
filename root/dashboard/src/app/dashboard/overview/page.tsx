@@ -363,7 +363,7 @@ export default function OverviewPage() {
                         {service.status}
                       </Badge>
                       <div className="text-xs text-muted-foreground mt-1">
-                        {service.latency}ms • {service.uptime?.toFixed(1)}%
+                        {service.latency}ms
                       </div>
                     </div>
                   </div>

@@ -471,25 +471,6 @@ async def get_dashboard_metrics(
         # Get DLQ depth from Prometheus
         dlq_items = get_prometheus_metric_value("octup_dlq_depth", {"tenant": tenant})
         
-        # Get customer satisfaction from context data (if available)
-        # Simplified query to avoid SQLAlchemy cache key issues
-        try:
-            # Use raw SQL to avoid func.json_extract cache issues
-            customer_satisfaction_query = text("""
-                SELECT AVG(CAST(context_data->>'customer_rating' AS FLOAT))
-                FROM exceptions 
-                WHERE tenant = :tenant 
-                AND context_data->>'customer_rating' IS NOT NULL
-            """)
-            customer_satisfaction_result = await db.execute(
-                customer_satisfaction_query, 
-                {"tenant": tenant}
-            )
-            customer_satisfaction = customer_satisfaction_result.scalar() or 4.2
-        except Exception:
-            # Fallback if query fails
-            customer_satisfaction = 4.2
-        
         # Get orders processed today
         today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
         orders_today_query = select(func.count(func.distinct(OrderEvent.order_id))).where(
@@ -524,7 +505,6 @@ async def get_dashboard_metrics(
             # Additional real metrics
             "revenue_at_risk_cents": financial_metrics["revenue_at_risk_cents"],
             "monthly_adjustments_cents": financial_metrics["monthly_adjustments_cents"],
-            "customer_satisfaction": float(customer_satisfaction),
             "orders_processed_today": orders_today,
             "dlq_items": int(dlq_items),
             "ai_average_confidence": ai_metrics["average_confidence"],
@@ -568,7 +548,6 @@ async def get_system_health(
                 "name": service_name,
                 "status": "healthy" if service_health.get("healthy", False) else "unhealthy",
                 "latency": service_health.get("response_time", 0),
-                "uptime": 99.9,  # Mock value
                 "last_check": service_health.get("last_check"),
                 "error_message": service_health.get("error_message")
             })
