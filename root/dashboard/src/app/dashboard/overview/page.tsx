@@ -158,18 +158,7 @@ export default function OverviewPage() {
       </div>
 
       {/* Enhanced KPI Cards with Real Data */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <KPICard
-          title="SLA Compliance"
-          value={((metrics?.sla_compliance_rate || 0) * 100).toFixed(1)}
-          unit="%"
-          target={95}
-          icon={<Shield className="h-4 w-4" />}
-          trend={generateKPITrend(metrics?.sla_compliance_rate ? metrics.sla_compliance_rate * 100 : 95, exceptionTrendData)}
-          status={((metrics?.sla_compliance_rate || 0) * 100) >= 95 ? 'good' : 'warning'}
-          description="Target: 95%+"
-        />
-
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         <KPICard
           title="Active Exceptions"
           value={metrics?.active_exceptions || 0}
