@@ -1,0 +1,40 @@
+# Default SLA Policy Configuration
+# Time thresholds in minutes unless otherwise specified
+
+# Core SLA thresholds
+pick_minutes: 120        # 2 hours to pick from order paid
+pack_minutes: 180        # 3 hours to pack from pick completed  
+ship_minutes: 1440       # 24 hours to ship from pack completed
+
+# Carrier delivery expectations (in business days)
+carrier_delivery_days: 5  # 5 business days for standard delivery
+express_delivery_days: 2  # 2 business days for express
+overnight_delivery_days: 1 # Next business day for overnight
+
+# Operational adjustments
+weekend_multiplier: 1.5   # 50% longer SLA on weekends
+holiday_multiplier: 2.0   # 100% longer SLA on holidays
+
+# Volume-based adjustments
+high_volume_threshold: 100    # Orders per hour threshold
+high_volume_multiplier: 1.3   # 30% longer SLA during high volume
+peak_season_multiplier: 1.4   # 40% longer during peak season
+
+# Item-specific adjustments
+oversized_multiplier: 1.5     # 50% longer for oversized items
+hazmat_multiplier: 2.0        # 100% longer for hazardous materials
+fragile_multiplier: 1.2       # 20% longer for fragile items
+
+# Exception thresholds
+missing_scan_buffer_minutes: 60  # Grace period before flagging missing scan
+system_error_escalation_minutes: 15  # Immediate escalation for system errors
+
+# Business rules
+require_weekend_approval: true    # Weekend shipments need approval
+auto_escalate_critical: true      # Auto-escalate critical exceptions
+enable_predictive_alerts: true    # Enable proactive SLA breach alerts
+
+# Notification settings
+ops_notification_delay_minutes: 30   # Notify ops team after 30min delay
+customer_notification_delay_minutes: 60  # Notify customer after 1hr delay
+escalation_delay_hours: 4         # Escalate unresolved exceptions after 4hrs

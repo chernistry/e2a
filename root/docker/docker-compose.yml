@@ -1,0 +1,197 @@
+services:
+  # Main API Service
+  api:
+    build: ..
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    env_file: ../.env
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PYTHONPATH=/app
+      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@host.docker.internal:54322/postgres
+      - DIRECT_URL=postgresql+asyncpg://postgres:postgres@host.docker.internal:54322/postgres
+    ports:
+      - "8000:8000"
+    volumes:
+      - ../app:/app/app
+      - ../flows:/app/flows
+      - ../prompts:/app/prompts
+    networks:
+      - octup-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Shopify Mock API (New)
+  shopify-mock:
+    build:
+      context: ../demo/shopify-mock
+      dockerfile: Dockerfile
+    environment:
+      - PYTHONUNBUFFERED=1
+      - OCTUP_API_URL=http://api:8000
+      - SHOPIFY_DEMO_API_PRODUCE_MIN_ORDERS=${SHOPIFY_DEMO_API_PRODUCE_MIN_ORDERS:-1001}
+      - SHOPIFY_DEMO_API_PRODUCE_MAX_ORDERS=${SHOPIFY_DEMO_API_PRODUCE_MAX_ORDERS:-1999}
+      - WEBHOOK_DELAY_SECONDS=${WEBHOOK_DELAY_SECONDS:-2}
+    ports:
+      - "8090:8090"
+    depends_on:
+      - api
+    networks:
+      - octup-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8090/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    profiles:
+      - demo
+
+  # Shopify-like Event Generator (Legacy - kept for compatibility)
+  shopify-generator:
+    build:
+      context: ../scripts/event_simulator
+      dockerfile: Dockerfile
+    environment:
+      - PYTHONUNBUFFERED=1
+      - TARGET_API=http://api:8000
+      - DEFAULT_TENANT_ID=demo-3pl
+      - EPS=2
+      - WORKERS=2
+      - EXCEPTION_RATE=0.13
+      - METRICS_PORT=8080
+      - SEED=42
+    ports:
+      - "8080:8080"  # Metrics port
+      - "8081:8081"  # Health check port
+    depends_on:
+      - api
+    networks:
+      - octup-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+    profiles:
+      - generator
+
+  # Event Simulator for Testing (Legacy - kept for compatibility)
+  event-simulator:
+    build:
+      context: ../scripts
+      dockerfile: event-simulator.Dockerfile
+    env_file: ../.env
+    environment:
+      - PYTHONUNBUFFERED=1
+      - API_BASE_URL=http://api:8000
+      - PROMETHEUS_PORT=9109
+      - DATASET_PATH=/app/data/dataset/olist_orders_dataset.csv
+    ports:
+      - "9109:9109"  # Prometheus metrics
+    volumes:
+      - ../data:/app/data:ro
+    depends_on:
+      - api
+    networks:
+      - octup-network
+    profiles:
+      - simulator
+
+  # Local Redis (for development when not using Redis Cloud)
+  redis-local:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis-data:/data
+    networks:
+      - octup-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    profiles:
+      - local-redis
+
+  # Optional: Local OTEL Collector (for development)
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:latest
+    command: ["--config=/etc/otel-collector-config.yaml"]
+    volumes:
+      - ./otel-collector.yaml:/etc/otel-collector-config.yaml:ro
+    ports:
+      - "4317:4317"   # OTLP gRPC receiver
+      - "4318:4318"   # OTLP HTTP receiver
+      - "8888:8888"   # Prometheus metrics
+    networks:
+      - octup-network
+    profiles:
+      - observability
+
+  # Prefect Server (Local Community Edition)
+  prefect-server:
+    image: prefecthq/prefect:3-latest
+    command: prefect server start --host 0.0.0.0
+    environment:
+      - PREFECT_UI_URL=http://127.0.0.1:4200/api
+      - PREFECT_API_URL=http://127.0.0.1:4200/api
+      - PREFECT_SERVER_API_HOST=0.0.0.0
+      - PREFECT_SERVER_API_PORT=4200
+      - PREFECT_API_DATABASE_CONNECTION_URL=sqlite+aiosqlite:////opt/prefect/orion.db
+    ports:
+      - "4200:4200"  # Prefect UI and API
+    volumes:
+      - prefect-data:/opt/prefect
+    networks:
+      - octup-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4200/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    profiles:
+      - prefect
+
+  # Prefect Worker (for workflow execution)
+  prefect-worker:
+    build: ..
+    command: >
+      sh -c "
+        echo 'Waiting for Prefect server to be ready...' &&
+        sleep 10 &&
+        poetry run prefect config set PREFECT_API_URL=http://prefect-server:4200/api &&
+        poetry run prefect worker start --pool default-agent-pool --type process
+      "
+    env_file: ../.env
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PYTHONPATH=/app
+      - PREFECT_API_URL=http://prefect-server:4200/api
+      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@host.docker.internal:54322/postgres
+      - DIRECT_URL=postgresql+asyncpg://postgres:postgres@host.docker.internal:54322/postgres
+    volumes:
+      - ../app:/app/app
+      - ../flows:/app/flows
+      - ../prompts:/app/prompts
+    depends_on:
+      - prefect-server
+      - api
+    networks:
+      - octup-network
+    profiles:
+      - prefect
+
+networks:
+  octup-network:
+    driver: bridge
+
+volumes:
+  redis-data:
+    driver: local
+  prefect-data:
+    driver: local

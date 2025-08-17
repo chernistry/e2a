@@ -1,0 +1,54 @@
+# Default Billing Tariffs Configuration
+# All fees in cents (USD)
+
+# Core operation fees
+pick_fee_cents: 30        # $0.30 per pick operation
+pack_fee_cents: 20        # $0.20 per pack operation  
+label_fee_cents: 15       # $0.15 per shipping label
+kitting_fee_cents: 50     # $0.50 per kitting operation
+
+# Storage fees
+storage_fee_cents_per_day: 5      # $0.05 per item per day
+long_term_storage_days: 90        # Days before long-term storage rate
+long_term_storage_multiplier: 2.0 # 2x rate for long-term storage
+
+# Minimum fees
+min_order_fee_cents: 50   # $0.50 minimum per order
+min_monthly_fee_cents: 10000  # $100 minimum monthly fee
+
+# Volume discounts (order count thresholds)
+volume_tier_1_orders: 100     # 100+ orders per month
+volume_tier_1_discount: 0.05  # 5% discount
+
+volume_tier_2_orders: 500     # 500+ orders per month  
+volume_tier_2_discount: 0.10  # 10% discount
+
+volume_tier_3_orders: 1000    # 1000+ orders per month
+volume_tier_3_discount: 0.15  # 15% discount
+
+# Special handling fees
+rush_multiplier: 2.0          # 2x fee for rush orders
+oversized_multiplier: 1.5     # 1.5x fee for oversized items
+hazmat_multiplier: 3.0        # 3x fee for hazardous materials
+fragile_multiplier: 1.2       # 1.2x fee for fragile items
+gift_wrap_fee_cents: 100      # $1.00 for gift wrapping
+
+# Return processing
+return_processing_fee_cents: 75   # $0.75 per return
+restocking_fee_cents: 150         # $1.50 restocking fee
+inspection_fee_cents: 25          # $0.25 per item inspection
+
+# Value-added services
+photo_fee_cents: 25           # $0.25 per product photo
+quality_check_fee_cents: 50   # $0.50 per quality check
+custom_packaging_fee_cents: 200  # $2.00 for custom packaging
+
+# Adjustment policies
+billing_dispute_credit_days: 30  # Days to issue credit for disputes
+auto_credit_threshold_cents: 500 # Auto-credit adjustments under $5.00
+manual_review_threshold_cents: 2000  # Manual review for adjustments over $20.00
+
+# Late fees and penalties
+late_payment_fee_cents: 2500     # $25.00 late payment fee
+late_payment_days: 30            # Days before late fee applies
+interest_rate_annual: 0.18        # 18% annual interest on overdue amounts

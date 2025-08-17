@@ -1,0 +1,41 @@
+
+# Prefect deployment configuration
+name: oktup-flows
+version: 1.0.0
+
+# Build configuration
+build:
+  - prefect.deployments.steps.run_shell_script:
+      script: echo "Building flows..."
+
+# Push configuration (for local deployment, we don't need to push anywhere)
+push: null
+
+# Pull configuration
+pull:
+  - prefect.deployments.steps.set_working_directory:
+      directory: /Users/sasha/IdeaProjects/oktup/root
+
+# Deployments
+deployments:
+  - name: nightly-invoice-validation
+    entrypoint: flows/invoice_validate_nightly.py:invoice_validate_nightly
+    work_pool:
+      name: default-agent-pool
+    tags:
+      - invoice
+      - validation
+      - nightly
+    description: "Nightly invoice validation with event streaming simulation"
+    version: "1.0.0"
+    
+  - name: event-streaming
+    entrypoint: flows/event_streaming.py:event_streaming_flow
+    work_pool:
+      name: default-agent-pool
+    tags:
+      - events
+      - streaming
+      - simulation
+    description: "Event streaming simulation for testing and development"
+    version: "1.0.0"

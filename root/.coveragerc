@@ -1,0 +1,37 @@
+[run]
+branch = True
+source = 
+    app
+    flows
+    scripts/event_simulator
+omit =
+    */migrations/*
+    */tests/*
+    */__init__.py
+    */__pycache__/*
+    */conftest.py
+    app/main.py
+    scripts/event_simulator/__pycache__/*
+
+[report]
+fail_under = 90
+show_missing = True
+skip_covered = False
+precision = 2
+exclude_lines =
+    pragma: no cover
+    def __repr__
+    def __str__
+    raise AssertionError
+    raise NotImplementedError
+    if __name__ == .__main__.:
+    if TYPE_CHECKING:
+    @abstractmethod
+    pass
+
+[html]
+directory = htmlcov
+title = Octup E²A Coverage Report
+
+[xml]
+output = coverage.xml
