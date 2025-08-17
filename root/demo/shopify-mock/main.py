@@ -63,7 +63,7 @@ def init_demo_data():
     
     # Generate products
     print("📦 Generating products...")
-    for category in ['electronics', 'clothing', 'home_garden', 'books']:  # Только существующие категории
+    for category in ['electronics', 'clothing', 'home_garden', 'books']:  # Only existing categories
         for _ in range(20):  # More products for variety
             product = generator.generate_product_variant(category)
             products_db[product['id']] = product

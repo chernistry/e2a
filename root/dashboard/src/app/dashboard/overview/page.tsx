@@ -458,10 +458,83 @@ export default function OverviewPage() {
           setIsModalOpen(false);
           setSelectedExceptionId(null);
         }}
-        onResolve={(id, resolution) => {
-          console.log(`Resolving exception ${id} with: ${resolution}`);
-          setIsModalOpen(false);
-          setSelectedExceptionId(null);
+        onResolve={async (id, resolution) => {
+          try {
+            console.log(`Resolving exception ${id} with API call...`);
+            
+            // Make real API call to resolve exception
+            await apiClient.resolveException(id, resolution);
+            
+            console.log(`Exception ${id} resolved successfully via API`);
+            
+            // Close modal
+            setIsModalOpen(false);
+            setSelectedExceptionId(null);
+            
+            // Show beautiful success notification
+            const successDiv = document.createElement('div');
+            successDiv.innerHTML = `
+              <div class="fixed top-4 right-4 z-50 w-96 rounded-lg border border-green-200 bg-green-50 p-4 shadow-lg transition-all duration-300">
+                <div class="flex items-start gap-3">
+                  <svg class="h-5 w-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                  </svg>
+                  <div class="flex-1 min-w-0">
+                    <div class="text-sm font-semibold text-green-800 mb-1">Exception Resolved</div>
+                    <div class="text-sm text-green-700">Exception ${id} has been successfully resolved.</div>
+                  </div>
+                  <button onclick="this.parentElement.parentElement.remove()" class="flex-shrink-0 text-green-600 hover:text-green-800 transition-colors">
+                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            `;
+            document.body.appendChild(successDiv);
+            
+            // Auto remove after 4 seconds
+            setTimeout(() => {
+              if (successDiv.parentNode) {
+                successDiv.remove();
+              }
+            }, 4000);
+            
+            // Refresh the page to get updated data
+            setTimeout(() => window.location.reload(), 1500);
+            
+          } catch (error) {
+            console.error(`Failed to resolve exception ${id}:`, error);
+            
+            // Show beautiful error notification
+            const errorDiv = document.createElement('div');
+            errorDiv.innerHTML = `
+              <div class="fixed top-4 right-4 z-50 w-96 rounded-lg border border-red-200 bg-red-50 p-4 shadow-lg transition-all duration-300">
+                <div class="flex items-start gap-3">
+                  <svg class="h-5 w-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                  </svg>
+                  <div class="flex-1 min-w-0">
+                    <div class="text-sm font-semibold text-red-800 mb-1">Resolution Failed</div>
+                    <div class="text-sm text-red-700">Failed to resolve exception ${id}. Please try again.</div>
+                  </div>
+                  <button onclick="this.parentElement.parentElement.remove()" class="flex-shrink-0 text-red-600 hover:text-red-800 transition-colors">
+                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            `;
+            document.body.appendChild(errorDiv);
+            
+            // Auto remove after 5 seconds
+            setTimeout(() => {
+              if (errorDiv.parentNode) {
+                errorDiv.remove();
+              }
+            }, 5000);
+          }
         }}
         onEscalate={(id, level) => {
           console.log(`Escalating exception ${id} to level ${level}`);

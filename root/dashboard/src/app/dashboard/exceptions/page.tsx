@@ -64,7 +64,7 @@ export default function ExceptionsPage() {
     return Array.from(reasonSet);
   }, [exceptions?.exceptions]);
 
-  // Calculate statistics
+  // Calculate statistics from real data
   const stats = useMemo(() => {
     if (!exceptions?.exceptions) return { total: 0, open: 0, resolved: 0, critical: 0, avgResolutionTime: 0 };
 
@@ -73,8 +73,21 @@ export default function ExceptionsPage() {
     const resolved = exceptions.exceptions.filter(e => e.status === 'RESOLVED').length;
     const critical = exceptions.exceptions.filter(e => e.severity === 'CRITICAL').length;
 
-    // Mock average resolution time calculation
-    const avgResolutionTime = 4.2; // hours
+    // Calculate real average resolution time from resolved exceptions
+    const resolvedExceptions = exceptions.exceptions.filter(e => 
+      e.status === 'RESOLVED' && e.resolved_at && e.created_at
+    );
+    
+    let avgResolutionTime = 0;
+    if (resolvedExceptions.length > 0) {
+      const totalResolutionTime = resolvedExceptions.reduce((sum, exception) => {
+        const createdAt = new Date(exception.created_at);
+        const resolvedAt = new Date(exception.resolved_at!);
+        const resolutionTimeHours = (resolvedAt.getTime() - createdAt.getTime()) / (1000 * 60 * 60);
+        return sum + resolutionTimeHours;
+      }, 0);
+      avgResolutionTime = totalResolutionTime / resolvedExceptions.length;
+    }
 
     return { total, open, resolved, critical, avgResolutionTime };
   }, [exceptions?.exceptions]);
@@ -478,10 +491,83 @@ export default function ExceptionsPage() {
           setIsModalOpen(false);
           setSelectedExceptionId(null);
         }}
-        onResolve={(id, resolution) => {
-          console.log(`Resolving exception ${id} with: ${resolution}`);
-          setIsModalOpen(false);
-          setSelectedExceptionId(null);
+        onResolve={async (id, resolution) => {
+          try {
+            console.log(`Resolving exception ${id} with API call...`);
+            
+            // Make real API call to resolve exception
+            await apiClient.resolveException(id, resolution);
+            
+            console.log(`Exception ${id} resolved successfully via API`);
+            
+            // Close modal
+            setIsModalOpen(false);
+            setSelectedExceptionId(null);
+            
+            // Show beautiful success notification
+            const successDiv = document.createElement('div');
+            successDiv.innerHTML = `
+              <div class="fixed top-4 right-4 z-50 w-96 rounded-lg border border-green-200 bg-green-50 p-4 shadow-lg transition-all duration-300">
+                <div class="flex items-start gap-3">
+                  <svg class="h-5 w-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                  </svg>
+                  <div class="flex-1 min-w-0">
+                    <div class="text-sm font-semibold text-green-800 mb-1">Exception Resolved</div>
+                    <div class="text-sm text-green-700">Exception ${id} has been successfully resolved.</div>
+                  </div>
+                  <button onclick="this.parentElement.parentElement.remove()" class="flex-shrink-0 text-green-600 hover:text-green-800 transition-colors">
+                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            `;
+            document.body.appendChild(successDiv);
+            
+            // Auto remove after 4 seconds
+            setTimeout(() => {
+              if (successDiv.parentNode) {
+                successDiv.remove();
+              }
+            }, 4000);
+            
+            // Refresh the page to get updated data
+            setTimeout(() => window.location.reload(), 1500);
+            
+          } catch (error) {
+            console.error(`Failed to resolve exception ${id}:`, error);
+            
+            // Show beautiful error notification
+            const errorDiv = document.createElement('div');
+            errorDiv.innerHTML = `
+              <div class="fixed top-4 right-4 z-50 w-96 rounded-lg border border-red-200 bg-red-50 p-4 shadow-lg transition-all duration-300">
+                <div class="flex items-start gap-3">
+                  <svg class="h-5 w-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                  </svg>
+                  <div class="flex-1 min-w-0">
+                    <div class="text-sm font-semibold text-red-800 mb-1">Resolution Failed</div>
+                    <div class="text-sm text-red-700">Failed to resolve exception ${id}. Please try again.</div>
+                  </div>
+                  <button onclick="this.parentElement.parentElement.remove()" class="flex-shrink-0 text-red-600 hover:text-red-800 transition-colors">
+                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            `;
+            document.body.appendChild(errorDiv);
+            
+            // Auto remove after 5 seconds
+            setTimeout(() => {
+              if (errorDiv.parentNode) {
+                errorDiv.remove();
+              }
+            }, 5000);
+          }
         }}
         onEscalate={(id, level) => {
           console.log(`Escalating exception ${id} to level ${level}`);
