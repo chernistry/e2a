@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { 
   AlertTriangle, 
   Clock, 
@@ -19,7 +20,8 @@ import {
   TrendingUp,
   BarChart3,
   Users,
-  DollarSign
+  DollarSign,
+  HelpCircle
 } from 'lucide-react';
 import { apiClient, useApiData, Exception } from '@/lib/api';
 import { ExceptionDetailModal } from '@/components/ui/exception-detail-modal';
@@ -194,7 +196,18 @@ export default function ExceptionsPage() {
             <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
               <div className="flex items-center gap-2 mb-2">
                 <div className="w-2 h-2 bg-blue-500 rounded-full" />
-                <span className="font-medium text-blue-900">Peak Hours</span>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div className="flex items-center gap-1 cursor-help">
+                      <span className="font-medium text-blue-900">Peak Hours</span>
+                      <HelpCircle className="h-3 w-3 text-blue-700" />
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Calculated from historical exception data over the last 30 days.<br />
+                    Shows the time periods with highest exception volume.</p>
+                  </TooltipContent>
+                </Tooltip>
               </div>
               <p className="text-sm text-blue-800">
                 Most exceptions occur between 2-4 PM during order processing peak
@@ -204,7 +217,18 @@ export default function ExceptionsPage() {
             <div className="p-3 bg-green-50 rounded-lg border border-green-200">
               <div className="flex items-center gap-2 mb-2">
                 <div className="w-2 h-2 bg-green-500 rounded-full" />
-                <span className="font-medium text-green-900">AI Success</span>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div className="flex items-center gap-1 cursor-help">
+                      <span className="font-medium text-green-900">AI Success</span>
+                      <HelpCircle className="h-3 w-3 text-green-700" />
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Percentage of exceptions successfully analyzed by AI with confidence ≥ 80%.<br />
+                    Measured over the last 7 days of AI processing activity.</p>
+                  </TooltipContent>
+                </Tooltip>
               </div>
               <p className="text-sm text-green-800">
                 85% of exceptions are automatically categorized with high confidence
@@ -357,9 +381,17 @@ export default function ExceptionsPage() {
                           <div className="text-sm text-muted-foreground">
                             {new Date(exception.created_at).toLocaleString()}
                             {exception.ai_confidence && (
-                              <span className="ml-2 text-blue-600">
-                                AI: {(exception.ai_confidence * 100).toFixed(0)}%
-                              </span>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <span className="ml-2 text-blue-600 cursor-help">
+                                    AI: {(exception.ai_confidence * 100).toFixed(0)}%
+                                  </span>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p>AI analysis confidence score.<br />
+                                  Higher scores indicate more reliable categorization.</p>
+                                </TooltipContent>
+                              </Tooltip>
                             )}
                           </div>
                         </div>
@@ -461,9 +493,18 @@ export default function ExceptionsPage() {
                         </Badge>
                       </div>
                       {exception.ai_confidence && (
-                        <div className="text-sm text-blue-600">
-                          AI Confidence: {(exception.ai_confidence * 100).toFixed(0)}%
-                        </div>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <div className="text-sm text-blue-600 cursor-help">
+                              AI Confidence: {(exception.ai_confidence * 100).toFixed(0)}%
+                            </div>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>AI analysis confidence score.<br />
+                            Scores ≥80% are considered high confidence.<br />
+                            Based on pattern matching and historical data.</p>
+                          </TooltipContent>
+                        </Tooltip>
                       )}
                       {exception.ops_note && (
                         <p className="text-sm text-muted-foreground truncate">

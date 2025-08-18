@@ -15,6 +15,7 @@
 
 import Providers from '@/components/layout/providers';
 import { Toaster } from '@/components/ui/sonner';
+import { TooltipProvider } from '@/components/ui/tooltip';
 import { fontVariables } from '@/lib/font';
 import ThemeProvider from '@/components/layout/ThemeToggle/theme-provider';
 import { cn } from '@/lib/utils';
@@ -175,21 +176,27 @@ export default async function RootLayout({
           */}
           <Providers activeThemeValue={activeThemeValue as string}>
             {/* 
-              Toast notifications for user feedback
-              Provides non-intrusive notifications for:
-              - Success messages
-              - Error alerts
-              - Information updates
-              - User actions confirmation
+              Tooltip provider for global tooltip support
+              Enables tooltips throughout the application with consistent styling
             */}
-            <Toaster />
-            
-            {/* 
-              Main application content
-              This is where all page content will be rendered
-              The children prop contains the specific page components
-            */}
-            {children}
+            <TooltipProvider delayDuration={300}>
+              {/* 
+                Toast notifications for user feedback
+                Provides non-intrusive notifications for:
+                - Success messages
+                - Error alerts
+                - Information updates
+                - User actions confirmation
+              */}
+              <Toaster />
+              
+              {/* 
+                Main application content
+                This is where all page content will be rendered
+                The children prop contains the specific page components
+              */}
+              {children}
+            </TooltipProvider>
           </Providers>
         </ThemeProvider>
       </body>

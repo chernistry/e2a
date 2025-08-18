@@ -176,7 +176,7 @@ export default function OverviewPage() {
           icon={<Brain className="h-4 w-4" />}
           trend={generateKPITrend(metrics?.ai_analysis_success_rate ? metrics.ai_analysis_success_rate * 100 : 88)}
           status={((metrics?.ai_analysis_success_rate || 0) * 100) >= 85 ? 'good' : 'warning'}
-          description={`Analyzed: ${metrics?.ai_total_analyzed || 0}`}
+          description={`AI analysis success rate (confidence ≥80%). Total analyzed: ${metrics?.ai_total_analyzed || 0}`}
         />
 
         <KPICard

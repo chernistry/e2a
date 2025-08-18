@@ -148,7 +148,7 @@ export const ExceptionDetailModal: React.FC<ExceptionDetailModalProps> = ({
   if (loading) {
     return (
       <Dialog open={isOpen} onOpenChange={onClose}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className='max-w-7xl max-h-[90vh] overflow-y-auto'>
           <DialogHeader>
             <DialogTitle>Loading Exception Details</DialogTitle>
           </DialogHeader>
@@ -163,7 +163,7 @@ export const ExceptionDetailModal: React.FC<ExceptionDetailModalProps> = ({
   if (error || !exception) {
     return (
       <Dialog open={isOpen} onOpenChange={onClose}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className='max-w-7xl max-h-[90vh] overflow-y-auto'>
           <DialogHeader>
             <DialogTitle>Exception Not Found</DialogTitle>
           </DialogHeader>
@@ -208,7 +208,7 @@ export const ExceptionDetailModal: React.FC<ExceptionDetailModalProps> = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className='max-w-7xl max-h-[90vh] overflow-y-auto'>
         <DialogHeader>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -249,130 +249,161 @@ export const ExceptionDetailModal: React.FC<ExceptionDetailModalProps> = ({
           </TabsList>
 
           <TabsContent value="overview" className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* SLA Status */}
-              {exception.sla_details && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Left Column */}
+              <div className="space-y-4">
+                {/* SLA Status */}
+                {exception.sla_details && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <Target className="h-5 w-5" />
+                        SLA Status
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-3">
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm">Progress</span>
+                          <span className="text-sm font-medium">
+                            {exception.sla_details.elapsed_time}h / {exception.sla_details.target_time}h
+                          </span>
+                        </div>
+                        <Progress 
+                          value={(exception.sla_details.elapsed_time / exception.sla_details.target_time) * 100} 
+                          className="h-2"
+                        />
+                        <div className="grid grid-cols-2 gap-4 text-sm">
+                          <div>
+                            <span className="text-muted-foreground">Remaining:</span>
+                            <div className="font-medium">{exception.sla_details.remaining_time}h</div>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground">Escalation:</span>
+                            <div className="font-medium">Level {exception.sla_details.escalation_level}</div>
+                          </div>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Exception Details */}
                 <Card>
                   <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <Target className="h-5 w-5" />
-                      SLA Status
-                    </CardTitle>
+                    <CardTitle>Exception Details</CardTitle>
                   </CardHeader>
                   <CardContent>
                     <div className="space-y-3">
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm">Progress</span>
+                      <div className="flex items-center gap-2">
+                        <Clock className="h-4 w-4 text-muted-foreground" />
+                        <span className="text-sm text-muted-foreground">Created:</span>
                         <span className="text-sm font-medium">
-                          {exception.sla_details.elapsed_time}h / {exception.sla_details.target_time}h
+                          {new Date(exception.created_at).toLocaleString()}
                         </span>
                       </div>
-                      <Progress 
-                        value={(exception.sla_details.elapsed_time / exception.sla_details.target_time) * 100} 
-                        className="h-2"
-                      />
-                      <div className="grid grid-cols-2 gap-4 text-sm">
-                        <div>
-                          <span className="text-muted-foreground">Remaining:</span>
-                          <div className="font-medium">{exception.sla_details.remaining_time}h</div>
-                        </div>
-                        <div>
-                          <span className="text-muted-foreground">Escalation:</span>
-                          <div className="font-medium">Level {exception.sla_details.escalation_level}</div>
-                        </div>
+                      <div className="flex items-center gap-2">
+                        <User className="h-4 w-4 text-muted-foreground" />
+                        <span className="text-sm text-muted-foreground">Tenant:</span>
+                        <span className="text-sm font-medium">{exception.tenant}</span>
                       </div>
+                      {exception.correlation_id && (
+                        <div className="flex items-center gap-2">
+                          <FileText className="h-4 w-4 text-muted-foreground" />
+                          <span className="text-sm text-muted-foreground">Correlation ID:</span>
+                          <span className="text-sm font-mono">{exception.correlation_id}</span>
+                        </div>
+                      )}
+                      {exception.ops_note && (
+                        <div>
+                          <span className="text-sm font-medium text-muted-foreground">Operations Note:</span>
+                          <p className="text-sm mt-1 p-2 bg-gray-50 rounded">{exception.ops_note}</p>
+                        </div>
+                      )}
+                      {exception.client_note && (
+                        <div>
+                          <span className="text-sm font-medium text-muted-foreground">Client Note:</span>
+                          <p className="text-sm mt-1 p-2 bg-blue-50 rounded">{exception.client_note}</p>
+                        </div>
+                      )}
                     </div>
                   </CardContent>
                 </Card>
-              )}
+              </div>
 
-              {/* Financial Impact */}
-              {exception.financial_impact && (
+              {/* Right Column */}
+              <div className="space-y-4">
+                {/* Financial Impact */}
+                {exception.financial_impact && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <DollarSign className="h-5 w-5" />
+                        Financial Impact
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-2">
+                        <div className="flex justify-between">
+                          <span className="text-sm text-muted-foreground">Potential Penalty:</span>
+                          <span className="font-medium text-red-600">
+                            {formatCurrency(exception.financial_impact.potential_penalty, exception.financial_impact.currency)}
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-sm text-muted-foreground">Recovery Cost:</span>
+                          <span className="font-medium">
+                            {formatCurrency(exception.financial_impact.recovery_cost, exception.financial_impact.currency)}
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-sm text-muted-foreground">Customer Compensation:</span>
+                          <span className="font-medium">
+                            {formatCurrency(exception.financial_impact.customer_compensation, exception.financial_impact.currency)}
+                          </span>
+                        </div>
+                        <Separator />
+                        <div className="flex justify-between font-semibold">
+                          <span>Total Impact:</span>
+                          <span className="text-red-600">
+                            {formatCurrency(exception.financial_impact.total_impact, exception.financial_impact.currency)}
+                          </span>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Quick Actions */}
                 <Card>
                   <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <DollarSign className="h-5 w-5" />
-                      Financial Impact
-                    </CardTitle>
+                    <CardTitle>Quick Actions</CardTitle>
                   </CardHeader>
-                  <CardContent>
-                    <div className="space-y-2">
-                      <div className="flex justify-between">
-                        <span className="text-sm text-muted-foreground">Potential Penalty:</span>
-                        <span className="font-medium text-red-600">
-                          {formatCurrency(exception.financial_impact.potential_penalty, exception.financial_impact.currency)}
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-sm text-muted-foreground">Recovery Cost:</span>
-                        <span className="font-medium">
-                          {formatCurrency(exception.financial_impact.recovery_cost, exception.financial_impact.currency)}
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-sm text-muted-foreground">Customer Compensation:</span>
-                        <span className="font-medium">
-                          {formatCurrency(exception.financial_impact.customer_compensation, exception.financial_impact.currency)}
-                        </span>
-                      </div>
-                      <Separator />
-                      <div className="flex justify-between font-semibold">
-                        <span>Total Impact:</span>
-                        <span className="text-red-600">
-                          {formatCurrency(exception.financial_impact.total_impact, exception.financial_impact.currency)}
-                        </span>
-                      </div>
-                    </div>
+                  <CardContent className="space-y-2">
+                    <Button 
+                      className="w-full justify-start" 
+                      variant="outline"
+                      onClick={() => onResolve?.(exception.id, 'Manual resolution')}
+                    >
+                      <CheckCircle className="h-4 w-4 mr-2" />
+                      Mark as Resolved
+                    </Button>
+                    <Button 
+                      className="w-full justify-start" 
+                      variant="outline"
+                      onClick={() => onEscalate?.(exception.id, (exception.sla_details?.escalation_level || 0) + 1)}
+                    >
+                      <TrendingUp className="h-4 w-4 mr-2" />
+                      Escalate
+                    </Button>
+                    <Button className="w-full justify-start" variant="outline">
+                      <ExternalLink className="h-4 w-4 mr-2" />
+                      View in CRM
+                    </Button>
                   </CardContent>
                 </Card>
-              )}
+              </div>
             </div>
-
-            {/* Exception Details */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Exception Details</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2">
-                      <Clock className="h-4 w-4 text-muted-foreground" />
-                      <span className="text-sm text-muted-foreground">Created:</span>
-                      <span className="text-sm font-medium">
-                        {new Date(exception.created_at).toLocaleString()}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <User className="h-4 w-4 text-muted-foreground" />
-                      <span className="text-sm text-muted-foreground">Tenant:</span>
-                      <span className="text-sm font-medium">{exception.tenant}</span>
-                    </div>
-                    {exception.correlation_id && (
-                      <div className="flex items-center gap-2">
-                        <FileText className="h-4 w-4 text-muted-foreground" />
-                        <span className="text-sm text-muted-foreground">Correlation ID:</span>
-                        <span className="text-sm font-mono">{exception.correlation_id}</span>
-                      </div>
-                    )}
-                  </div>
-                  <div className="space-y-2">
-                    {exception.ops_note && (
-                      <div>
-                        <span className="text-sm font-medium text-muted-foreground">Operations Note:</span>
-                        <p className="text-sm mt-1 p-2 bg-gray-50 rounded">{exception.ops_note}</p>
-                      </div>
-                    )}
-                    {exception.client_note && (
-                      <div>
-                        <span className="text-sm font-medium text-muted-foreground">Client Note:</span>
-                        <p className="text-sm mt-1 p-2 bg-blue-50 rounded">{exception.client_note}</p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
           </TabsContent>
 
           <TabsContent value="order" className="space-y-4">

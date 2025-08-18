@@ -3,7 +3,6 @@
 import React from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { 
   LineChart, 
@@ -22,9 +21,7 @@ import {
   Cell,
   ScatterChart,
   Scatter,
-  FunnelChart,
-  Funnel,
-  LabelList
+  Legend
 } from 'recharts';
 import { 
   TrendingUp, 
@@ -49,8 +46,6 @@ const COLORS = {
   muted: '#6b7280',
   accent: '#8b5cf6'
 };
-
-const CHART_COLORS = [COLORS.primary, COLORS.success, COLORS.warning, COLORS.danger, COLORS.info, COLORS.accent];
 
 // Enhanced KPI Card with trend and sparkline
 interface KPICardProps {
@@ -119,15 +114,36 @@ export const KPICard: React.FC<KPICardProps> = ({
         )}
 
         {trend && trend.length > 0 && (
-          <div className="mt-3 h-8">
-            <ResponsiveContainer width="100%" height="100%">
+          <div className='mt-3 h-8'>
+            <ResponsiveContainer width='100%' height='100%'>
               <LineChart data={trend}>
-                <Line 
-                  type="monotone" 
-                  dataKey="value" 
-                  stroke={COLORS.primary} 
+                <Tooltip
+                  content={({ active, payload }) => {
+                    if (active && payload && payload.length) {
+                      return (
+                        <div className='rounded-lg border bg-background p-2 shadow-sm'>
+                          <div className='grid grid-cols-1 gap-1.5'>
+                            <span className='text-muted-foreground'>
+                              {payload[0].payload.time}
+                            </span>
+                            <span className='font-bold'>
+                              {payload[0].value}
+                              {unit}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    }
+                    return null;
+                  }}
+                />
+                <Line
+                  type='monotone'
+                  dataKey='value'
+                  stroke={COLORS.primary}
                   strokeWidth={1.5}
                   dot={false}
+                  activeDot={false}
                 />
               </LineChart>
             </ResponsiveContainer>
@@ -206,6 +222,30 @@ interface ExceptionTrendProps {
 }
 
 export const ExceptionTrendChart: React.FC<ExceptionTrendProps> = ({ data }) => {
+  // Format time for better display
+  const formatTime = (timeStr: string) => {
+    try {
+      const date = new Date(timeStr);
+      return date.toLocaleTimeString('en-US', { 
+        hour: '2-digit', 
+        minute: '2-digit',
+        hour12: false 
+      });
+    } catch {
+      return timeStr;
+    }
+  };
+
+  // Generate sample data if no data provided or normalize existing data
+  const chartData = data && data.length > 0 ? data : [
+    { time: '00:00', total: 5, resolved: 3, critical: 1, high: 2, medium: 2 },
+    { time: '04:00', total: 3, resolved: 2, critical: 0, high: 1, medium: 2 },
+    { time: '08:00', total: 12, resolved: 8, critical: 2, high: 4, medium: 6 },
+    { time: '12:00', total: 18, resolved: 12, critical: 3, high: 6, medium: 9 },
+    { time: '16:00', total: 25, resolved: 15, critical: 5, high: 8, medium: 12 },
+    { time: '20:00', total: 8, resolved: 6, critical: 1, high: 3, medium: 4 }
+  ];
+
   return (
     <Card>
       <CardHeader>
@@ -214,17 +254,60 @@ export const ExceptionTrendChart: React.FC<ExceptionTrendProps> = ({ data }) => 
           Exception Trends (24h)
         </CardTitle>
         <CardDescription>
-          Exception volume and resolution patterns
+          Exception volume by severity over time
         </CardDescription>
       </CardHeader>
       <CardContent>
         <div className="h-64">
           <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={data}>
+            <AreaChart data={chartData} margin={{ top: 10, right: 30, left: 0, bottom: 20 }}>
               <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="time" />
-              <YAxis />
-              <Tooltip />
+              <XAxis 
+                dataKey="time" 
+                tick={{ fontSize: 12 }}
+                tickFormatter={formatTime}
+                axisLine={true}
+                tickLine={true}
+                label={{
+                  value: 'Time',
+                  position: 'insideBottom',
+                  offset: -10
+                }}
+              />
+              <YAxis 
+                tick={{ fontSize: 12 }}
+                axisLine={true}
+                tickLine={true}
+                label={{
+                  value: 'Exceptions',
+                  angle: -90,
+                  position: 'insideLeft'
+                }}
+              />
+              <Tooltip 
+                labelFormatter={(value) => `Time: ${formatTime(value as string)}`}
+                formatter={(value: any, name: string) => {
+                  const nameMap: Record<string, string> = {
+                    critical: 'Critical',
+                    high: 'High', 
+                    medium: 'Medium',
+                    total: 'Total',
+                    resolved: 'Resolved'
+                  };
+                  return [value, nameMap[name] || name];
+                }}
+                contentStyle={{
+                  backgroundColor: 'white',
+                  border: '1px solid #ccc',
+                  borderRadius: '4px'
+                }}
+              />
+              <Legend 
+                wrapperStyle={{ paddingTop: '20px' }}
+                iconType="rect"
+                verticalAlign='top'
+                align='right'
+              />
               <Area 
                 type="monotone" 
                 dataKey="critical" 
@@ -232,6 +315,7 @@ export const ExceptionTrendChart: React.FC<ExceptionTrendProps> = ({ data }) => 
                 stroke={COLORS.danger} 
                 fill={COLORS.danger}
                 fillOpacity={0.8}
+                name="Critical"
               />
               <Area 
                 type="monotone" 
@@ -240,6 +324,7 @@ export const ExceptionTrendChart: React.FC<ExceptionTrendProps> = ({ data }) => 
                 stroke={COLORS.warning} 
                 fill={COLORS.warning}
                 fillOpacity={0.8}
+                name="High"
               />
               <Area 
                 type="monotone" 
@@ -248,6 +333,7 @@ export const ExceptionTrendChart: React.FC<ExceptionTrendProps> = ({ data }) => 
                 stroke={COLORS.info} 
                 fill={COLORS.info}
                 fillOpacity={0.8}
+                name="Medium"
               />
             </AreaChart>
           </ResponsiveContainer>
@@ -326,6 +412,20 @@ interface ProcessingFunnelProps {
 }
 
 export const ProcessingFunnel: React.FC<ProcessingFunnelProps> = ({ data }) => {
+  // Generate sample data if none provided
+  const funnelData = data && data.length > 0 ? data : [
+    { name: 'Orders Received', value: 1000, fill: COLORS.primary },
+    { name: 'Validated', value: 950, fill: COLORS.success },
+    { name: 'Processing', value: 900, fill: COLORS.info },
+    { name: 'Shipped', value: 850, fill: COLORS.warning },
+    { name: 'Delivered', value: 800, fill: COLORS.accent }
+  ];
+
+  const maxValue = Math.max(...funnelData.map(d => d.value));
+  const funnelHeight = 240;
+  const funnelWidth = 300;
+  const stepHeight = funnelHeight / funnelData.length;
+
   return (
     <Card>
       <CardHeader>
@@ -334,23 +434,112 @@ export const ProcessingFunnel: React.FC<ProcessingFunnelProps> = ({ data }) => {
           Processing Funnel
         </CardTitle>
         <CardDescription>
-          Order processing stages and drop-offs
+          Order processing stages with conversion rates
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <div className="h-64">
-          <ResponsiveContainer width="100%" height="100%">
-            <FunnelChart>
-              <Funnel
-                dataKey="value"
-                data={data}
-                isAnimationActive
-              >
-                <LabelList position="center" fill="#fff" stroke="none" />
-              </Funnel>
-              <Tooltip />
-            </FunnelChart>
-          </ResponsiveContainer>
+        <div className="flex items-center justify-center">
+          <svg width={funnelWidth + 100} height={funnelHeight + 40} className="overflow-visible">
+            {funnelData.map((item, index) => {
+              const widthRatio = item.value / maxValue;
+              const width = funnelWidth * widthRatio;
+              const x = (funnelWidth - width) / 2;
+              const y = index * stepHeight + 10;
+              const prevValue = index > 0 ? funnelData[index - 1].value : item.value;
+              const conversionRate = index > 0 ? ((item.value / prevValue) * 100).toFixed(1) : '100.0';
+              
+              return (
+                <g key={index}>
+                  {/* Funnel segment */}
+                  <rect
+                    x={x}
+                    y={y}
+                    width={width}
+                    height={stepHeight - 4}
+                    fill={item.fill}
+                    rx={4}
+                    className="transition-all duration-300 hover:opacity-80"
+                  />
+                  
+                  {/* Value text inside segment */}
+                  <text
+                    x={funnelWidth / 2}
+                    y={y + stepHeight / 2}
+                    textAnchor="middle"
+                    dominantBaseline="middle"
+                    fill="white"
+                    fontSize="14"
+                    fontWeight="600"
+                  >
+                    {item.value.toLocaleString()}
+                  </text>
+                  
+                  {/* Stage name on the right */}
+                  <text
+                    x={funnelWidth + 20}
+                    y={y + stepHeight / 2 - 8}
+                    dominantBaseline="middle"
+                    fontSize="12"
+                    fontWeight="500"
+                    fill="currentColor"
+                  >
+                    {item.name}
+                  </text>
+                  
+                  {/* Conversion rate on the right */}
+                  <text
+                    x={funnelWidth + 20}
+                    y={y + stepHeight / 2 + 8}
+                    dominantBaseline="middle"
+                    fontSize="11"
+                    fill="#6b7280"
+                  >
+                    {conversionRate}% conversion
+                  </text>
+                  
+                  {/* Connection line to next stage */}
+                  {index < funnelData.length - 1 && (
+                    <line
+                      x1={x + width / 2}
+                      y1={y + stepHeight - 4}
+                      x2={(funnelWidth - (funnelWidth * (funnelData[index + 1].value / maxValue))) / 2 + (funnelWidth * (funnelData[index + 1].value / maxValue)) / 2}
+                      y2={y + stepHeight + 6}
+                      stroke="#e5e7eb"
+                      strokeWidth="2"
+                      strokeDasharray="4,4"
+                    />
+                  )}
+                </g>
+              );
+            })}
+          </svg>
+        </div>
+        
+        {/* Summary stats */}
+        <div className="mt-4 grid grid-cols-3 gap-4 text-center">
+          <div className="p-2 bg-gray-50 rounded">
+            <div className="text-lg font-semibold text-gray-900">
+              {((funnelData[funnelData.length - 1].value / funnelData[0].value) * 100).toFixed(1)}%
+            </div>
+            <div className="text-xs text-gray-600">Overall Conversion</div>
+          </div>
+          <div className="p-2 bg-gray-50 rounded">
+            <div className="text-lg font-semibold text-gray-900">
+              {(funnelData[0].value - funnelData[funnelData.length - 1].value).toLocaleString()}
+            </div>
+            <div className="text-xs text-gray-600">Total Drop-offs</div>
+          </div>
+          <div className="p-2 bg-gray-50 rounded">
+            <div className="text-lg font-semibold text-gray-900">
+              {funnelData.reduce((acc, curr, idx) => {
+                if (idx === 0) return acc;
+                const prev = funnelData[idx - 1];
+                const dropRate = ((prev.value - curr.value) / prev.value) * 100;
+                return Math.max(acc, dropRate);
+              }, 0).toFixed(1)}%
+            </div>
+            <div className="text-xs text-gray-600">Biggest Drop</div>
+          </div>
         </div>
       </CardContent>
     </Card>
@@ -368,6 +557,15 @@ interface AIPerformanceProps {
 }
 
 export const AIPerformanceScatter: React.FC<AIPerformanceProps> = ({ data }) => {
+  // Generate sample data if none provided
+  const scatterData = data && data.length > 0 ? data : [
+    { confidence: 95, accuracy: 92, volume: 45, category: 'Payment Issues' },
+    { confidence: 88, accuracy: 85, volume: 32, category: 'Shipping Delays' },
+    { confidence: 92, accuracy: 89, volume: 28, category: 'Inventory Problems' },
+    { confidence: 85, accuracy: 82, volume: 18, category: 'Address Validation' },
+    { confidence: 78, accuracy: 75, volume: 12, category: 'Other' }
+  ];
+
   return (
     <Card>
       <CardHeader>
@@ -376,29 +574,62 @@ export const AIPerformanceScatter: React.FC<AIPerformanceProps> = ({ data }) => 
           AI Analysis Performance
         </CardTitle>
         <CardDescription>
-          Confidence vs Accuracy by exception category
+          AI confidence vs accuracy by exception category (bubble size = volume)
         </CardDescription>
       </CardHeader>
       <CardContent>
         <div className="h-64">
           <ResponsiveContainer width="100%" height="100%">
-            <ScatterChart data={data}>
+            <ScatterChart data={scatterData} margin={{ top: 20, right: 20, bottom: 40, left: 40 }}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis 
                 type="number" 
                 dataKey="confidence" 
                 name="Confidence" 
                 unit="%" 
-                domain={[0, 100]}
+                domain={[70, 100]}
+                tick={{ fontSize: 12 }}
+                label={{ value: 'AI Confidence %', position: 'insideBottom', offset: -10 }}
               />
               <YAxis 
                 type="number" 
                 dataKey="accuracy" 
                 name="Accuracy" 
                 unit="%" 
-                domain={[0, 100]}
+                domain={[70, 100]}
+                tick={{ fontSize: 12 }}
+                label={{
+                  value: 'Accuracy %',
+                  angle: -90,
+                  position: 'insideLeft'
+                }}
               />
-              <Tooltip cursor={{ strokeDasharray: '3 3' }} />
+              <Tooltip
+                cursor={{ strokeDasharray: '3 3' }}
+                content={({ active, payload }) => {
+                  if (active && payload && payload.length) {
+                    const data = payload[0].payload;
+                    return (
+                      <div className='rounded-lg border bg-background p-2 shadow-sm'>
+                        <div className='grid grid-cols-1 gap-1.5'>
+                          <span className='font-bold'>{data.category}</span>
+                          <span className='text-sm text-muted-foreground'>
+                            Confidence: {data.confidence}%
+                          </span>
+                          <span className='text-sm text-muted-foreground'>
+                            Accuracy: {data.accuracy}%
+                          </span>
+                          <span className='text-sm text-muted-foreground'>
+                            Volume: {data.volume}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  }
+                  return null;
+                }}
+              />
+              <Legend />
               <Scatter 
                 name="AI Performance" 
                 dataKey="volume" 
@@ -406,6 +637,19 @@ export const AIPerformanceScatter: React.FC<AIPerformanceProps> = ({ data }) => 
               />
             </ScatterChart>
           </ResponsiveContainer>
+        </div>
+        {/* Legend showing categories */}
+        <div className="mt-4">
+          <div className="text-sm font-medium text-muted-foreground mb-2">Categories:</div>
+          <div className="grid grid-cols-2 gap-2 text-xs">
+            {scatterData.map((item, index) => (
+              <div key={index} className="flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-blue-500" />
+                <span>{item.category}</span>
+                <span className="text-muted-foreground">({item.volume})</span>
+              </div>
+            ))}
+          </div>
         </div>
       </CardContent>
     </Card>
@@ -465,10 +709,17 @@ export const ActivityFeed: React.FC<ActivityFeedProps> = ({ activities, onItemCl
           {activities.map((activity) => (
             <div 
               key={activity.id}
-              className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer hover:bg-gray-50 transition-colors ${
-                onItemClick ? 'hover:shadow-sm' : ''
+              className={`flex items-start gap-3 p-3 rounded-lg border transition-colors ${
+                onItemClick ? 'cursor-pointer hover:bg-gray-50 hover:shadow-sm' : ''
               }`}
               onClick={() => onItemClick?.(activity)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  onItemClick?.(activity);
+                }
+              }}
+              role={onItemClick ? 'button' : 'listitem'}
+              tabIndex={onItemClick ? 0 : -1}
             >
               <div className={`p-2 rounded-full ${getSeverityColor(activity.severity)}`}>
                 {getIcon(activity.type)}
