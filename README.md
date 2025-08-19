@@ -28,10 +28,10 @@ Equipped with realistic Shopify Mock API for (magic) realism.
 ## What Problem Does This Solve?
 
 **For Warehouse Operations:**
-- **Manual Exception Triage**: Teams spend 30-50% of time investigating SLA breaches
-- **Reactive Problem Detection**: Issues found hours/days later
-- **Invoice Disputes**: Billing discrepancies lead to customer disputes
-- **Inconsistent Communication**: Customer notifications vary in quality
+- **Manual Exception Triage**: Teams spend significant time investigating SLA breaches
+- **Reactive Problem Detection**: Issues often found hours/days later
+- **Invoice Disputes**: Billing discrepancies can lead to customer disputes
+- **Inconsistent Communication**: Customer notifications may vary in quality
 
 **For Customers:**
 - **Lack of Visibility**: Limited insight into order delays
@@ -40,10 +40,10 @@ Equipped with realistic Shopify Mock API for (magic) realism.
 
 ## Business Value
 
-- **30-50% Reduction** in manual exception triage time
+- **Designed to reduce** manual exception triage time
 - **Real-time Detection** of SLA breaches for faster resolution
-- **20-30% Reduction** in billing disputes through auto-validation
-- **Better Customer Experience** with AI-generated explanations
+- **Automated invoice validation** to reduce billing disputes
+- **Improved Customer Experience** with AI-generated explanations
 
 ## Core Features
 
@@ -62,11 +62,11 @@ E²A includes a robust Dead Letter Queue system that acts as a safety net for fa
 
 ## AI Integration
 
-E²A leverages AI to automate exception analysis and policy validation, reducing manual triage time by 30-50%.
+E²A integrates AI to assist with exception analysis and policy validation, designed to reduce manual triage time.
 
 ### AI Exception Analyst
-Automatically analyzes logistics exceptions (pick delays, pack delays, carrier issues) and generates:
-- **Operational Notes**: Technical analysis for ops teams with root cause and next actions
+Analyzes logistics exceptions and generates:
+- **Operational Notes**: Analysis for ops teams based on available data
 - **Customer Notes**: User-friendly explanations without internal jargon
 - **Classification Labels**: Structured categorization (PICK_DELAY, PACK_DELAY, CARRIER_ISSUE, etc.)
 - **Confidence Scores**: AI confidence levels for quality control
@@ -75,19 +75,19 @@ Automatically analyzes logistics exceptions (pick delays, pack delays, carrier i
 ```json
 {
   "label": "PICK_DELAY",
-  "confidence": 0.95,
-  "ops_note": "Order 789 experienced a 65-minute delay due to pick station congestion during peak hours. Investigate staffing levels and consider load balancing.",
-  "client_note": "We apologize for the delay in processing your order. We are actively working to resolve this and will update you shortly.",
-  "reasoning": "Pick delay caused a 65-minute order delay."
+  "confidence": 0.85,
+  "ops_note": "Order experienced a 60-minute delay during peak hours. Pattern suggests potential capacity constraints during afternoon rush.",
+  "client_note": "Your order is taking longer than expected due to high volume. We're prioritizing it and will update you shortly.",
+  "reasoning": "Timing and delay percentage indicate potential capacity issue"
 }
 ```
 
 ### AI Policy Linting
 Reviews business policies (SLA configurations, billing rules) and provides:
 - **Validation Issues**: Syntax errors, missing fields, invalid values
-- **Best Practice Suggestions**: Performance optimizations, edge case handling
-- **Test Case Generation**: Automated test scenarios for policy validation
-- **Risk Assessment**: Identifies potential operational risks
+- **Best Practice Suggestions**: Optimization recommendations and edge case handling
+- **Test Case Generation**: Suggested test scenarios for policy validation
+- **Risk Assessment**: Identifies potential operational considerations
 
 **Supported Policy Types:**
 - SLA policies (pick/pack/ship timeframes)
@@ -389,7 +389,7 @@ flowchart LR
 2. **AI Fallback Strategy**: Hybrid AI + rule-based system with 0.55 confidence threshold and $20/day budget  
 3. **Event Sourcing**: Event-driven SLA evaluation with configurable policies and real-time breach detection
 
-**Benefits**: Sub-millisecond duplicate detection, 85% AI success rate, real-time SLA monitoring.
+**Benefits**: Fast duplicate detection, AI-assisted analysis, real-time SLA monitoring.
 
 ## Quick Start
 

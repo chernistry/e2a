@@ -119,9 +119,46 @@ def _check_address_issues(self, order):
 
 ---
 
+## 🤖 **AI Analysis Scope & Limitations**
+
+### **What AI Actually Does**
+The AI performs **root cause analysis** on logistics exceptions using available data:
+
+**Current Implementation:**
+- ✅ Analyzes timing patterns (peak hours, weekends, operational context)
+- ✅ Evaluates delay severity and SLA impact (percentage overruns)
+- ✅ Provides operational insights and prevention recommendations
+- ✅ Generates customer-friendly communications
+- ✅ Identifies priority factors for exception handling
+
+**Data Sources Available:**
+```python
+{
+    "exception_type": "PICK_DELAY",           # What happened
+    "delay_minutes": 60,                      # How severe
+    "delay_percentage": 50.0,                 # SLA impact
+    "hour_of_day": 15,                        # When (3 PM)
+    "day_of_week": "Monday",                  # Context
+    "is_peak_hours": True,                    # Operational pattern
+    "order_value": 1119.71                   # Business impact (if available)
+}
+```
+
+### **AI Analysis Limitations**
+**What AI CANNOT determine (missing data):**
+- ❌ Real warehouse capacity and staffing levels
+- ❌ Equipment failures or technical issues  
+- ❌ Order complexity (SKU count, special handling)
+- ❌ Supplier delays or inventory issues
+- ❌ External factors (weather, traffic, carrier problems)
+
+**Result:** AI provides **intelligent pattern analysis** rather than deep operational diagnostics. It's more sophisticated than simple label copying, but limited by available data sources.
+
+---
+
 ## 🤔 **Additional Demo Simplifications**
 
-### 6. **AI Fallback Responses**
+### 7. **AI Fallback Responses**
 **File:** `app/services/ai_client.py:_make_request()`
 
 ```python
@@ -137,7 +174,7 @@ except httpx.TimeoutException:
 
 ---
 
-### 7. **Cache Key Generation**
+### 8. **Cache Key Generation**
 **File:** `app/services/ai_exception_analyst.py:_get_cache_key()`
 
 ```python
