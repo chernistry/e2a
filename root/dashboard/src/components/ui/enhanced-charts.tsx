@@ -5,6 +5,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { 
+  Tooltip as UITooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
+import { 
   LineChart, 
   Line, 
   AreaChart, 
@@ -58,6 +64,7 @@ interface KPICardProps {
   trend?: Array<{ time: string; value: number }>;
   status?: 'good' | 'warning' | 'critical';
   description?: string;
+  tooltip?: string;
 }
 
 export const KPICard: React.FC<KPICardProps> = ({
@@ -69,7 +76,8 @@ export const KPICard: React.FC<KPICardProps> = ({
   icon,
   trend,
   status = 'good',
-  description
+  description,
+  tooltip
 }) => {
   const statusColors = {
     good: 'text-green-600',
@@ -87,7 +95,20 @@ export const KPICard: React.FC<KPICardProps> = ({
   return (
     <Card className="relative overflow-hidden">
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium">{title}</CardTitle>
+        {tooltip ? (
+          <TooltipProvider>
+            <UITooltip>
+              <TooltipTrigger asChild>
+                <CardTitle className="text-sm font-medium cursor-help">{title}</CardTitle>
+              </TooltipTrigger>
+              <TooltipContent className="max-w-xs">
+                <p className="text-sm">{tooltip}</p>
+              </TooltipContent>
+            </UITooltip>
+          </TooltipProvider>
+        ) : (
+          <CardTitle className="text-sm font-medium">{title}</CardTitle>
+        )}
         {icon && <div className="h-4 w-4 text-muted-foreground">{icon}</div>}
       </CardHeader>
       <CardContent>

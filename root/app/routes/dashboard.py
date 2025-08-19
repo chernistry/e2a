@@ -266,7 +266,7 @@ async def get_financial_metrics(db: AsyncSession, tenant: str) -> Dict[str, Any]
         Dict[str, Any]: Financial metrics with risk assessment and adjustments
     """
     # Calculate revenue at risk from active exceptions
-    # This is a simplified calculation - in reality you'd have more complex business logic
+    # This calculation is based purely on mathematical analysis of active exceptions
     active_exceptions_query = select(ExceptionRecord).where(
         and_(
             ExceptionRecord.tenant == tenant,
@@ -277,26 +277,25 @@ async def get_financial_metrics(db: AsyncSession, tenant: str) -> Dict[str, Any]
     active_exceptions_list = active_exceptions_result.scalars().all()
     
     revenue_at_risk = 0
+    exceptions_analyzed = 0
+    
     for exception in active_exceptions_list:
         # Estimate impact based on severity and context
         if exception.context_data and "order_value" in exception.context_data:
             order_value = exception.context_data["order_value"]
             
-            # Risk multiplier based on severity
+            # Risk multiplier based on severity - represents probability of revenue loss
             risk_multiplier = {
-                "CRITICAL": 0.8,
-                "HIGH": 0.5,
-                "MEDIUM": 0.2,
-                "LOW": 0.05
+                "CRITICAL": 0.8,  # 80% chance of revenue loss
+                "HIGH": 0.5,      # 50% chance of revenue loss
+                "MEDIUM": 0.2,    # 20% chance of revenue loss
+                "LOW": 0.05       # 5% chance of revenue loss
             }.get(exception.severity, 0.1)
             
             revenue_at_risk += order_value * risk_multiplier
+            exceptions_analyzed += 1
     
-    # Ensure revenue at risk is realistic (not $8760.9K which is suspiciously 8760 hours in a year)
-    if revenue_at_risk == 0 or revenue_at_risk > 1000000:  # More than $10K is unrealistic for demo
-        # Generate realistic revenue at risk ($2K - $8K)
-        base_risk = 2000 + (hash(tenant) % 6000)  # $2K - $8K
-        revenue_at_risk = base_risk
+    # No fallback - if there are no active exceptions, revenue at risk is genuinely 0
     
     # Get invoice adjustments for the month
     month_start = datetime.utcnow().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
@@ -318,7 +317,14 @@ async def get_financial_metrics(db: AsyncSession, tenant: str) -> Dict[str, Any]
     return {
         "revenue_at_risk_cents": int(revenue_at_risk * 100),  # Convert to cents
         "monthly_adjustments_cents": int(total_adjustments),
-        "currency": "USD"
+        "currency": "USD",
+        # Metadata for UI explanation
+        "revenue_at_risk_metadata": {
+            "calculation_method": "mathematical_analysis",
+            "active_exceptions_analyzed": exceptions_analyzed,
+            "is_zero_because_no_exceptions": revenue_at_risk == 0 and exceptions_analyzed == 0,
+            "disclaimer": "This calculation is based purely on mathematical analysis of active exceptions and their estimated impact. It does not account for potential contractual obligations, reputational risks, or other business factors that may contribute to revenue at risk."
+        }
     }
 
 
@@ -504,6 +510,7 @@ async def get_dashboard_metrics(
             
             # Additional real metrics
             "revenue_at_risk_cents": financial_metrics["revenue_at_risk_cents"],
+            "revenue_at_risk_metadata": financial_metrics.get("revenue_at_risk_metadata"),
             "monthly_adjustments_cents": financial_metrics["monthly_adjustments_cents"],
             "orders_processed_today": orders_today,
             "dlq_items": int(dlq_items),

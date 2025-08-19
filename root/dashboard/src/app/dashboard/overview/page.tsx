@@ -195,8 +195,16 @@ export default function OverviewPage() {
           title="Revenue at Risk"
           value={`$${((metrics?.revenue_at_risk_cents || 0) / 100).toFixed(1)}K`}
           icon={<DollarSign className="h-4 w-4" />}
-          status={(metrics?.revenue_at_risk_cents || 0) > 50000 ? 'critical' : 'warning'}
-          description="From active exceptions"
+          status={(metrics?.revenue_at_risk_cents || 0) > 50000 ? 'critical' : (metrics?.revenue_at_risk_cents || 0) > 0 ? 'warning' : 'good'}
+          description={
+            metrics?.revenue_at_risk_metadata?.is_zero_because_no_exceptions 
+              ? "No active exceptions" 
+              : `From ${metrics?.revenue_at_risk_metadata?.active_exceptions_analyzed || 0} active exceptions`
+          }
+          tooltip={
+            metrics?.revenue_at_risk_metadata?.disclaimer || 
+            "This calculation is based purely on mathematical analysis of active exceptions and their estimated impact. It does not account for potential contractual obligations, reputational risks, or other business factors that may contribute to revenue at risk."
+          }
         />
 
         <KPICard
