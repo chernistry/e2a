@@ -59,6 +59,10 @@ class AIClient:
         """
         self.provider = "openai"  # Default to OpenAI-compatible API
         self.model = settings.AI_MODEL
+        # Sanitize model name for Prometheus labels (replace ALL invalid chars with underscores)
+        # Prometheus labels must match [a-zA-Z_:][a-zA-Z0-9_:]*
+        import re
+        self.model_label = re.sub(r'[^a-zA-Z0-9_]', '_', self.model)
         self.api_key = settings.AI_API_KEY
         
         # ⚠️ Use mock-ai-service for testing, fallback to settings for production
@@ -121,9 +125,25 @@ class AIClient:
                 # Use robust JSON extraction
                 extract_result = await extract_exception_classification(raw_result)
                 if not extract_result.success:
+                    print(f"🔴 JSON extraction failed: {extract_result.error}")
+                    print(f"🔴 Raw AI response: {raw_result[:500]}...")
                     raise ValueError(f"JSON extraction failed: {extract_result.error}")
                 
                 parsed_result = extract_result.data
+                print(f"🔍 Parsed AI result: {parsed_result}")
+                
+                # Validate label against enum
+                label_value = parsed_result.get("label", "OTHER")
+                print(f"🏷️ AI returned label: '{label_value}'")
+                
+                # Check if label is valid
+                from app.schemas.ai import ExceptionLabel
+                valid_labels = [label.value for label in ExceptionLabel]
+                print(f"🏷️ Valid labels: {valid_labels}")
+                
+                if label_value not in valid_labels:
+                    print(f"❌ Invalid label '{label_value}', using OTHER")
+                    parsed_result["label"] = "OTHER"
                 
                 # Update metrics
                 processing_time = time.time() - start_time
@@ -132,7 +152,7 @@ class AIClient:
                 
                 ai_requests_total.labels(
                     provider=self.provider,
-                    model=self.model,
+                    model=self.model_label,
                     operation="exception_classification"
                 ).inc()
                 
@@ -141,7 +161,7 @@ class AIClient:
             except Exception as e:
                 ai_failures_total.labels(
                     provider=self.provider,
-                    error_type=type(e).__name__
+                    error_type=type(e).__name__.replace(".", "_").replace(" ", "_")
                 ).inc()
                 
                 span.set_attribute("error", str(e))
@@ -203,7 +223,7 @@ class AIClient:
                 
                 ai_requests_total.labels(
                     provider=self.provider,
-                    model=self.model,
+                    model=self.model_label,
                     operation="policy_linting"
                 ).inc()
                 
@@ -212,7 +232,7 @@ class AIClient:
             except Exception as e:
                 ai_failures_total.labels(
                     provider=self.provider,
-                    error_type=type(e).__name__
+                    error_type=type(e).__name__.replace(".", "_").replace(" ", "_")
                 ).inc()
                 
                 span.set_attribute("error", str(e))
@@ -357,13 +377,13 @@ class AIClient:
                 # Update metrics with real data
                 ai_tokens_total.labels(
                     provider=self.provider,
-                    model=self.model,
+                    model=self.model_label,
                     type="prompt"
                 ).inc(prompt_tokens)
                 
                 ai_tokens_total.labels(
                     provider=self.provider,
-                    model=self.model,
+                    model=self.model_label,
                     type="completion"
                 ).inc(completion_tokens)
                 
@@ -371,7 +391,7 @@ class AIClient:
                 if actual_cost_cents > 0:
                     ai_cost_cents_total.labels(
                         provider=self.provider,
-                        model=self.model
+                        model=self.model_label
                     ).inc(actual_cost_cents)
                     print(f"💰 Using real cost: {actual_cost_cents} cents")
                 else:
@@ -379,7 +399,7 @@ class AIClient:
                     estimated_cost_cents = max(1, total_tokens // 100)
                     ai_cost_cents_total.labels(
                         provider=self.provider,
-                        model=self.model
+                        model=self.model_label
                     ).inc(estimated_cost_cents)
                     print(f"💰 Using estimated cost: {estimated_cost_cents} cents (real cost not available)")
                 

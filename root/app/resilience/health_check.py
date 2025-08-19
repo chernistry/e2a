@@ -135,7 +135,7 @@ class HealthChecker:
                 health_check_failures.labels(
                     service=service_name,
                     check_type="full",
-                    error_type=type(e).__name__
+                    error_type=type(e).__name__.replace(".", "_").replace(" ", "_")
                 ).inc()
                 
                 health = ServiceHealth(

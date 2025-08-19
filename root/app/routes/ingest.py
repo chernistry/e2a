@@ -438,7 +438,7 @@ async def _process_event(
             ingest_errors_total.labels(
                 tenant=tenant,
                 source=event.source,
-                error_type=type(e).__name__
+                error_type=type(e).__name__.replace(".", "_").replace(" ", "_")
             ).inc()
             
             span.set_attribute("error", str(e))

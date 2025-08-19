@@ -87,7 +87,7 @@ async def replay_dlq(
         except Exception as e:
             replay_failures_total.labels(
                 tenant=tenant,
-                error_type=type(e).__name__
+                error_type=type(e).__name__.replace(".", "_").replace(" ", "_")
             ).inc()
             
             span.set_attribute("error", str(e))

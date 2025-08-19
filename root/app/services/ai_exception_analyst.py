@@ -74,6 +74,14 @@ async def analyze_exception_or_fallback(
             return
         
         # Handle different AI modes
+        if settings.AI_MODE == "disabled":
+            print(f"⚡ Using fallback for {exception.id} (AI_MODE=disabled)")
+            await _apply_fallback_analysis(db, exception)
+            ai_fallback_rate.labels(operation="exception_analysis").set(1.0)
+            span.set_attribute("analysis_source", "fallback")
+            span.set_attribute("fallback_reason", "mode_disabled")
+            return
+            
         if settings.AI_MODE == "fallback":
             print(f"⚡ Using fallback for {exception.id} (AI_MODE=fallback)")
             await _apply_fallback_analysis(db, exception)
@@ -158,13 +166,13 @@ async def _try_ai_analysis(exception: ExceptionRecord) -> Optional[Dict[str, Any
             
             if cached_result:
                 print(f"💾 Redis cache hit for exception {exception.id}")
-                cache_hits_total.labels(cache_type="ai_analysis").inc()
+                cache_hits_total.labels(cache_type="ai_analysis", operation="exception_analysis").inc()
                 return json.loads(cached_result)
         except Exception as redis_error:
             print(f"⚠️ Redis cache check failed: {redis_error}, proceeding without cache")
         
         print(f"🆕 Cache miss, making AI request for exception {exception.id}")
-        cache_misses_total.labels(cache_type="ai_analysis").inc()
+        cache_misses_total.labels(cache_type="ai_analysis", operation="exception_analysis").inc()
         
         # Prepare context for AI
         context = _prepare_ai_context(exception)
@@ -235,53 +243,95 @@ def _get_cache_key(exception: ExceptionRecord) -> str:
 
 def _prepare_ai_context(exception: ExceptionRecord) -> Dict[str, Any]:
     """
-    Prepare context for AI root cause analysis.
+    Prepare RAW ORDER DATA for AI analysis.
     
-    Builds comprehensive context dictionary for AI analysis with rich data
-    for root cause analysis instead of simple label copying.
+    Builds context with raw order data instead of pre-classified reason codes,
+    allowing AI to perform genuine analysis and classification.
+    
+    DEMO LIMITATION: No PII redaction applied. In production, implement proper
+    PII redaction or use isolated AI environments.
     
     Args:
-        exception (ExceptionRecord): Exception record for context building
+        exception (ExceptionRecord): Exception record containing raw order data
         
     Returns:
-        Dict[str, Any]: Context dictionary ready for AI root cause analysis
+        Dict[str, Any]: Raw order data for AI analysis
     """
+    # Start with basic order identification
     context = {
-        # Basic exception info
-        "exception_type": exception.reason_code,  # What happened (fact)
-        "order_id_suffix": exception.order_id[-4:] if len(exception.order_id) >= 4 else exception.order_id,
+        "order_id": exception.order_id,
         "tenant": exception.tenant,
-        "severity": exception.severity,
-        "status": exception.status,
         "created_at": exception.created_at.isoformat() if exception.created_at else None
     }
     
-    # Add timing and SLA data if available
+    # Extract RAW ORDER DATA from context_data (this should contain original order data)
     if exception.context_data:
-        context.update({
-            "actual_duration_minutes": exception.context_data.get("actual_minutes", 0),
-            "sla_threshold_minutes": exception.context_data.get("sla_minutes", 0),
-            "delay_minutes": exception.context_data.get("delay_minutes", 0),
-            "delay_percentage": (exception.context_data.get("delay_minutes", 0) / exception.context_data.get("sla_minutes", 1) * 100) if exception.context_data.get("sla_minutes", 0) > 0 else 0
-        })
-        
-        # Add any additional context data
-        for key, value in exception.context_data.items():
-            if key not in ["actual_minutes", "sla_minutes", "delay_minutes", "reason_code", "severity"]:
-                context[f"context_{key}"] = value
+        # Financial data
+        if "financial_status" in exception.context_data:
+            context["financial_status"] = exception.context_data["financial_status"]
+        if "payment_issues" in exception.context_data:
+            context["payment_issues"] = exception.context_data["payment_issues"]
+        if "total_price" in exception.context_data:
+            context["total_price"] = exception.context_data["total_price"]
+        if "currency" in exception.context_data:
+            context["currency"] = exception.context_data["currency"]
+            
+        # Fulfillment data
+        if "fulfillment_status" in exception.context_data:
+            context["fulfillment_status"] = exception.context_data["fulfillment_status"]
+        if "updated_at" in exception.context_data:
+            context["updated_at"] = exception.context_data["updated_at"]
+            
+        # Address data - DEMO: No redaction applied
+        if "shipping_address" in exception.context_data:
+            context["shipping_address"] = exception.context_data["shipping_address"]
+        if "billing_address" in exception.context_data:
+            context["billing_address"] = exception.context_data["billing_address"]
+            
+        # Customer data - DEMO: No redaction applied
+        if "customer" in exception.context_data:
+            context["customer"] = exception.context_data["customer"]
+            
+        # Line items
+        if "line_items" in exception.context_data:
+            context["line_items"] = exception.context_data["line_items"]
+            
+        # Delivery data
+        if "estimated_delivery_date" in exception.context_data:
+            context["estimated_delivery_date"] = exception.context_data["estimated_delivery_date"]
+        if "shipping_lines" in exception.context_data:
+            context["shipping_lines"] = exception.context_data["shipping_lines"]
+            
+        # Calculate fulfillment delay if we have timestamps
+        if "created_at" in exception.context_data and "updated_at" in exception.context_data:
+            try:
+                from datetime import datetime
+                created = datetime.fromisoformat(exception.context_data["created_at"].replace('Z', '+00:00'))
+                updated = datetime.fromisoformat(exception.context_data["updated_at"].replace('Z', '+00:00'))
+                delay_hours = (updated - created).total_seconds() / 3600
+                context["fulfillment_delay_hours"] = round(delay_hours, 1)
+            except:
+                pass
     
-    # Add time-based analysis context
+    # Add timing context for analysis
     if exception.created_at:
         context.update({
             "hour_of_day": exception.created_at.hour,
             "day_of_week": exception.created_at.strftime('%A'),
             "is_weekend": exception.created_at.weekday() >= 5,
-            "is_peak_hours": 14 <= exception.created_at.hour <= 17,  # 2-5 PM
-            "is_morning_rush": 8 <= exception.created_at.hour <= 11   # 8-11 AM
+            "is_peak_hours": 14 <= exception.created_at.hour <= 17,
+            "is_morning_rush": 8 <= exception.created_at.hour <= 11
         })
     
-    # Redact PII but keep business-relevant data
-    return redact_context(context)
+    # DO NOT include reason_code - let AI determine it from raw data!
+    # Remove any pre-classified data that would bias the AI
+    context.pop("reason_code", None)
+    context.pop("severity", None)
+    context.pop("classification", None)
+    
+    # DEMO: Return raw context without PII redaction
+    return context
+
 
 
 # ==== CONFIDENCE VALIDATION ==== #

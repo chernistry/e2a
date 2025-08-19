@@ -62,8 +62,9 @@ async def push_dlq(
         db.add(dlq_item)
         await db.flush()
         
-        # Update metrics
-        dlq_items_total.labels(tenant=tenant, error_type=error_class).inc()
+        # Update metrics (sanitize error_class for Prometheus)
+        sanitized_error_class = error_class.replace(".", "_").replace(" ", "_")
+        dlq_items_total.labels(tenant=tenant, error_type=sanitized_error_class).inc()
         await _update_dlq_depth_metric(db, tenant)
         
         return dlq_item

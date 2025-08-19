@@ -133,7 +133,7 @@ class ExponentialBackoffPolicy(RetryPolicy):
                 retry_failures_total.labels(
                     service=self.service_name,
                     operation=operation_name,
-                    error_type=type(exception).__name__
+                    error_type=type(exception).__name__.replace(".", "_").replace(" ", "_")
                 ).inc()
         
         return callback
@@ -189,7 +189,7 @@ class FixedDelayPolicy(RetryPolicy):
                 retry_failures_total.labels(
                     service=self.service_name,
                     operation=operation_name,
-                    error_type=type(exception).__name__
+                    error_type=type(exception).__name__.replace(".", "_").replace(" ", "_")
                 ).inc()
         
         return callback
