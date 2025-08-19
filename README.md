@@ -14,7 +14,7 @@
 > - **AI Cost Tracking**: Estimated costs rather than real provider pricing integration
 > - **Order Analysis**: Detects only obvious test data patterns rather than comprehensive validation
 > 
-> See [`facade.md`](facade.md) for detailed technical analysis. The architecture, patterns, and infrastructure components are production-ready, but business logic would need full implementation for production use.
+> See [`DEMO.md`](docs/DEMO.md) for detailed technical analysis. The architecture, patterns, and infrastructure components are production-ready, but business logic would need full implementation for production use.
 
 > **🚧 Active Development Notice**
 > 
