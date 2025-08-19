@@ -8,7 +8,6 @@
 > 
 > This is a **demonstration project** showcasing architecture and patterns for a 3PL exception management system. Several core business logic functions are simplified for demo purposes:
 > 
-> - **AI Automated Exception Resolution**: ✅ **IMPLEMENTED** - Real AI analysis of raw order data with automated action execution (payment retries, address validation, inventory reallocation)
 > - **Billing Calculations**: Simplified 3PL billing logic without complex rate cards and contract-specific pricing
 > - **SLA Detection**: Basic time-based rules without business calendar, warehouse capacity, or order complexity modeling
 > - **Order Analysis**: Detects only obvious test data patterns rather than comprehensive validation
@@ -49,7 +48,7 @@ Includes foundation for Slack integration and realistic Shopify Mock API for dem
 
 - **Real-time SLA Monitoring**: Detect pick, pack, and shipping delays instantly
 - **AI Exception Analyst**: Generate operational and customer-facing narratives using OpenRouter API
-- **AI Automated Resolution**: ✅ **NEW** - Intelligent automation of common exceptions (payment retries, address validation, inventory reallocation) with confidence-based decision making
+- **AI Automated Resolution**: Intelligent automation of common exceptions (payment retries, address validation, inventory reallocation) with confidence-based decision making
 - **Invoice Guard**: Nightly invoice validation with auto-adjustments
 - **AI Rule-Lint**: Validate business policies and generate test cases with AI assistance
 - **Slack Integration Foundation**: Basic Slack bot framework with webhook handling and query processing
@@ -64,7 +63,7 @@ E²A includes a robust Dead Letter Queue system that acts as a safety net for fa
 
 ## AI Integration
 
-E²A integrates AI to assist with exception analysis and policy validation, designed to reduce manual triage time.
+E²A integrates AI to assist with exception analysis, automated resolution, and policy validation, designed to reduce manual triage time and automate common operational tasks.
 
 ### AI Exception Analyst
 Analyzes logistics exceptions and generates:
@@ -81,6 +80,22 @@ Analyzes logistics exceptions and generates:
   "ops_note": "Order experienced a 60-minute delay during peak hours. Pattern suggests potential capacity constraints during afternoon rush.",
   "client_note": "Your order is taking longer than expected due to high volume. We're prioritizing it and will update you shortly.",
   "reasoning": "Timing and delay percentage indicate potential capacity issue"
+}
+```
+
+### AI Automated Resolution 
+Intelligently analyzes raw order data to determine if exceptions can be automatically resolved without human intervention.
+**Supported Automation Actions:** Includes stubs for payment retry with exponential backoff, address validation and postal code correction, inventory reallocation between warehouses, automated system health checks and recovery, and carrier API status synchronization.
+
+**Example Automated Resolution:**
+```json
+{
+  "can_auto_resolve": true,
+  "confidence": 0.95,
+  "automated_actions": ["payment_retry"],
+  "resolution_strategy": "Retry payment with exponential backoff",
+  "success_probability": 0.8,
+  "reasoning": "Payment failure appears transient based on error code and timing"
 }
 ```
 
@@ -115,10 +130,6 @@ AI_SAMPLING_SEVERITY: important_only
 - **Confidence Thresholds**: Quality gates for AI-generated content
 - **Comprehensive Monitoring**: Prometheus metrics for AI requests, tokens, costs, failures
 
-### AI API Endpoints
-- **POST /admin/ai/lint-policy**: AI-powered policy validation and test generation
-- **GET /exceptions/{id}**: Automatic AI analysis on exception retrieval
-- **POST /admin/cache/clear?cache_type=ai**: Clear AI analysis cache
 
 ### AI Implementation Details
 **Prompts**: External Jinja2 templates in `/prompts/` directory for maintainability
