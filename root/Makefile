@@ -47,6 +47,9 @@ up-cloud:	## Start for cloud deployment (API only, uses cloud services)
 up-full:	## Start with all optional services
 	docker compose -f $(COMPOSE_FILE) --profile local-redis --profile observability --profile prefect up --build -d
 
+up-demo:	## Start demo services (API + Shopify Mock)
+	docker compose -f $(COMPOSE_FILE) --profile demo up --build -d
+
 web-dev:	## Start the web dashboard in development mode
 	@echo "Starting Octup E²A Dashboard..."
 	cd dashboard && npm run dev
@@ -98,30 +101,43 @@ test:		## Run tests
 test-coverage:	## Run tests with coverage
 	pytest --cov=app --cov-report=html --cov-report=term
 
-## Event Simulator
-simulate:	## Start event simulator (default: 2 EPS, push mode)
-	docker compose -f $(COMPOSE_FILE) --profile simulator up -d event-simulator
+## Shopify Mock (Demo)
+demo-start:	## Start Shopify mock API for demo
+	docker compose -f $(COMPOSE_FILE) --profile demo up -d shopify-mock
 
-simulate-fast:	## Start simulator with high load (20 EPS)
-	EPS=20 JITTER_MS=50 BURST_CHANCE=0.1 docker compose -f $(COMPOSE_FILE) --profile simulator up -d event-simulator
+demo-stop:	## Stop Shopify mock API
+	docker compose -f $(COMPOSE_FILE) stop shopify-mock
 
-simulate-replay:	## Start simulator in replay mode (fast NDJSON playback)
-	SIM_MODE=replay DATASET_PATH=/app/data/events.ndjson docker compose -f $(COMPOSE_FILE) --profile simulator up -d event-simulator
+demo-logs:	## Show Shopify mock logs
+	docker compose -f $(COMPOSE_FILE) logs -f shopify-mock
 
-simulate-custom:	## Start simulator with custom settings (usage: EPS=10 WORKERS=4 make simulate-custom)
-	docker compose -f $(COMPOSE_FILE) --profile simulator up -d event-simulator
+demo-generate:	## Generate batch of demo orders (1001-1999 orders)
+	@echo "🎲 Generating demo orders batch..."
+	@curl -X POST http://localhost:8090/demo/generate-batch | jq .
 
-simulate-logs:	## Show event simulator logs
-	docker compose -f $(COMPOSE_FILE) logs -f event-simulator
+demo-clear:	## Clear all demo orders
+	@echo "🗑️  Clearing demo orders..."
+	@curl -X POST http://localhost:8090/demo/clear-orders | jq .
 
-simulate-stop:	## Stop event simulator
-	docker compose -f $(COMPOSE_FILE) stop event-simulator
+demo-stats:	## Show demo statistics
+	@echo "📊 Demo statistics:"
+	@curl -s http://localhost:8090/demo/stats | jq .
 
-simulate-metrics:	## Show simulator metrics URL
-	@echo "📊 Simulator metrics: http://localhost:9109/metrics"
-	@echo "📊 API metrics: http://localhost:8000/metrics"
+demo-health:	## Check Shopify mock health
+	@echo "🔍 Shopify mock health:"
+	@curl -s http://localhost:8090/health | jq .
 
-## Prefect Local Server
+## Development Workflows
+dev-demo:	## Start demo environment (API + Shopify Mock + Dashboard)
+	@echo "🚀 Starting demo environment..."
+	make up-demo
+	@echo "✅ Demo services started!"
+	@echo "📋 Available endpoints:"
+	@echo "   API: http://localhost:8000"
+	@echo "   Shopify Mock: http://localhost:8090"
+	@echo "   Dashboard: http://localhost:3000 (run 'make web-dev' in another terminal)"
+	@echo ""
+	@echo "🎯 Next step: make web-dev"
 prefect-server:	## Start local Prefect server
 	docker compose -f $(COMPOSE_FILE) --profile prefect up -d prefect-server
 
@@ -187,9 +203,10 @@ health:		## Check system health
 	@echo "🔍 Checking system health..."
 	@curl -s http://localhost:8000/healthz | jq . || echo "❌ API not responding"
 	@echo ""
-	@echo "📊 Metrics endpoints:"
+	@echo "📊 Available endpoints:"
 	@echo "   API: http://localhost:8000/metrics"
-	@echo "   Simulator: http://localhost:9109/metrics"
+	@echo "   Shopify Mock: http://localhost:8090/health"
+	@echo "   Dashboard: http://localhost:3000"
 
 ## Development Workflows
 dev-local:	## Complete local development setup

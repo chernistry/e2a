@@ -54,7 +54,7 @@ cmd_start() {
     check_supabase
     
     # Start remaining services
-    docker-compose -f "$COMPOSE_FILE" up -d api redis-local prefect-server prefect-worker event-simulator
+    docker-compose -f "$COMPOSE_FILE" up -d api redis-local prefect-server prefect-worker
     
     # Wait for API
     log_info "Waiting for API readiness..."
