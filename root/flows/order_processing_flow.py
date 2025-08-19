@@ -31,12 +31,7 @@ from app.storage.db import get_session
 from app.storage.models import OrderEvent, ExceptionRecord, Invoice, InvoiceAdjustment
 from app.services.invoice_generator import InvoiceGeneratorService
 from app.services.billing import BillingService
-from app.services.sla_engine import evaluate_sla
-from app.observability.metrics import (
-    orders_processed_total,
-    invoice_generation_total,
-    sla_compliance_rate
-)
+# Removed problematic metrics imports - using basic logging instead
 
 
 # ==== ORDER LIFECYCLE TASKS ==== #

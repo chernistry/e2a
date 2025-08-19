@@ -29,11 +29,7 @@ from app.storage.models import OrderEvent, Invoice, InvoiceAdjustment, Exception
 from app.services.invoice_generator import InvoiceGeneratorService
 from app.services.billing import BillingService, compute_amount_cents
 from app.services.policy_loader import get_billing_config
-from app.observability.metrics import (
-    invoice_generation_total,
-    invoice_adjustment_amount_cents,
-    revenue_recognized_total
-)
+# Removed problematic metrics imports - using basic logging
 
 
 # ==== INVOICE GENERATION TASKS ==== #

@@ -1,41 +1,47 @@
-
 # Prefect deployment configuration
-name: oktup-flows
-version: 1.0.0
+name: octup-e2a-flows
+prefect-version: 3.0.0
 
 # Build configuration
-build:
-  - prefect.deployments.steps.run_shell_script:
-      script: echo "Building flows..."
+build: null
 
-# Push configuration (for local deployment, we don't need to push anywhere)
+# Push configuration  
 push: null
 
 # Pull configuration
 pull:
   - prefect.deployments.steps.set_working_directory:
-      directory: /Users/sasha/IdeaProjects/oktup/root
+      directory: /Users/sasha/IdeaProjects/octup/root
 
 # Deployments
 deployments:
-  - name: nightly-invoice-validation
-    entrypoint: flows/invoice_validate_nightly.py:invoice_validate_nightly
+  - name: order-processing
+    entrypoint: flows/order_processing_flow.py:order_processing_pipeline
+    parameters:
+      tenant: demo-3pl
+      lookback_hours: 24
     work_pool:
       name: default-agent-pool
-    tags:
-      - invoice
-      - validation
-      - nightly
-    description: "Nightly invoice validation with event streaming simulation"
-    version: "1.0.0"
-    
-  - name: event-streaming
-    entrypoint: flows/event_streaming.py:event_streaming_flow
+      
+  - name: exception-management
+    entrypoint: flows/exception_management_flow.py:exception_management_pipeline
+    parameters:
+      tenant: demo-3pl
+      analysis_hours: 168
     work_pool:
       name: default-agent-pool
-    tags:
-      - events
-      - streaming
-      - simulation
-    description: "Event streaming simulation for testing and development"
-    version: "1.0.0"
+      
+  - name: billing-management
+    entrypoint: flows/billing_management_flow.py:billing_management_pipeline
+    parameters:
+      tenant: demo-3pl
+      lookback_hours: 24
+    work_pool:
+      name: default-agent-pool
+      
+  - name: business-orchestrator
+    entrypoint: flows/business_operations_orchestrator.py:business_operations_orchestrator
+    parameters:
+      tenant: demo-3pl
+    work_pool:
+      name: default-agent-pool

@@ -25,13 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.storage.db import get_session
 from app.storage.models import ExceptionRecord, OrderEvent
-from app.services.ai_exception_analyst import AIExceptionAnalyst
-from app.integrations.slack.processor import SlackProcessor
-from app.observability.metrics import (
-    exception_resolution_time,
-    exception_escalation_total,
-    customer_impact_score
-)
+# Removed problematic imports - using basic functionality
 
 
 # ==== EXCEPTION ANALYSIS TASKS ==== #
