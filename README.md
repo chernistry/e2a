@@ -4,6 +4,18 @@
 
 [![License: CC BY-NC 4.0](https://img.shields.io/badge/License-CC%20BY--NC%204.0-lightgrey.svg)](https://creativecommons.org/licenses/by-nc/4.0/)
 
+> **🚧 Demo Implementation Notice**
+> 
+> This is a **demonstration project** showcasing architecture and patterns for a 3PL exception management system. Several core business logic functions are simplified for demo purposes:
+> 
+> - **Automated Exception Resolution**: Uses probabilistic simulation instead of real API integrations (address validation, payment retries)
+> - **Billing Calculations**: Simplified 3PL billing logic without complex rate cards and contract-specific pricing
+> - **SLA Detection**: Basic time-based rules without business calendar, warehouse capacity, or order complexity modeling
+> - **AI Cost Tracking**: Estimated costs rather than real provider pricing integration
+> - **Order Analysis**: Detects only obvious test data patterns rather than comprehensive validation
+> 
+> See [`facade.md`](facade.md) for detailed technical analysis. The architecture, patterns, and infrastructure components are production-ready, but business logic would need full implementation for production use.
+
 > **🚧 Active Development Notice**
 > 
 > This project is currently in active development. The UI dashboard may display mock/simulated data for demonstration purposes. Real production data integration is being implemented. Please refer to the [Quick Start Guide](docs/QUICKSTART.md) for current development status and known limitations.
