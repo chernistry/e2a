@@ -183,6 +183,25 @@ class PromptLoader:
                                 policy_type=policy_type, 
                                 policy_content=policy_content)
     
+    def get_automated_resolution_prompt(self, **kwargs: Any) -> str:
+        """
+        Get rendered automated resolution analysis prompt.
+        
+        Renders the automated resolution prompt template with provided context
+        for AI-powered analysis of exception resolution possibilities.
+        
+        Args:
+            **kwargs: Context variables for prompt rendering including:
+                - exception_id: Exception identifier
+                - order_id: Order identifier  
+                - reason_code: Exception reason code
+                - Raw order data fields (without preprocessing)
+                
+        Returns:
+            str: Rendered prompt for automated resolution analysis
+        """
+        return self.render_prompt("automated_resolution", **kwargs)
+    
     # ==== TEMPLATE MANAGEMENT ==== #
     
     def list_available_prompts(self) -> list[str]:

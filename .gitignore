@@ -330,3 +330,4 @@ temp/
 .env.test.local
 .env.production.local
 root/.env.backup
+docs/.dev/*

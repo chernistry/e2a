@@ -238,6 +238,73 @@ class AIClient:
                 span.set_attribute("error", str(e))
                 raise
 
+    @ai_resilient("analyze_automated_resolution")
+    async def analyze_automated_resolution(
+        self,
+        context: Dict[str, Any],
+        prompt_template: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Analyze automated resolution possibility using AI.
+        
+        Performs AI-powered analysis of raw order data to determine if an exception
+        can be automatically resolved without human intervention, following the
+        principle of genuine analysis rather than pattern matching.
+        
+        Args:
+            context (Dict[str, Any]): Raw order and exception context data
+            prompt_template (Optional[str]): Custom prompt template override
+            
+        Returns:
+            Dict[str, Any]: Resolution analysis with automation recommendations
+            
+        Raises:
+            RuntimeError: If AI is disabled or quota exceeded
+            CircuitBreakerError: When AI service circuit breaker is open
+        """
+        if not self.api_key or settings.AI_PROVIDER_BASE_URL == "disabled":
+            raise RuntimeError("AI provider disabled")
+        
+        if self.daily_tokens_used >= self.max_daily_tokens:
+            raise RuntimeError("Daily token quota exceeded")
+        
+        with tracer.start_as_current_span("ai_analyze_automated_resolution") as span:
+            span.set_attribute("provider", self.provider)
+            span.set_attribute("model", self.model)
+            
+            start_time = time.time()
+            
+            try:
+                prompt = self._build_resolution_prompt(context, prompt_template)
+                raw_result = await self._make_request(prompt, "automated_resolution")
+                
+                # Parse JSON response
+                parsed_result = self._parse_resolution_response(raw_result)
+                
+                processing_time = time.time() - start_time
+                
+                span.set_attribute("processing_time_ms", int(processing_time * 1000))
+                span.set_attribute("can_auto_resolve", parsed_result.get("can_auto_resolve", False))
+                span.set_attribute("confidence", parsed_result.get("confidence", 0.0))
+                span.set_attribute("success_probability", parsed_result.get("success_probability", 0.0))
+                
+                ai_requests_total.labels(
+                    provider=self.provider,
+                    model=self.model_label,
+                    operation="automated_resolution"
+                ).inc()
+                
+                return parsed_result
+                
+            except Exception as e:
+                ai_failures_total.labels(
+                    provider=self.provider,
+                    error_type=type(e).__name__.replace(".", "_").replace(" ", "_")
+                ).inc()
+                
+                span.set_attribute("error", str(e))
+                raise
+
 
     async def get_generation_stats(self, generation_id: str) -> Optional[Dict[str, Any]]:
         """
@@ -588,6 +655,99 @@ Focus on real-world logistics scenarios, edge cases, and operational reliability
                 "label": "UNKNOWN",
                 "confidence": 0.0,
                 "reasoning": "Failed to parse AI response"
+            }
+
+    def _build_resolution_prompt(
+        self,
+        context: Dict[str, Any],
+        template: Optional[str] = None
+    ) -> str:
+        """
+        Build prompt for automated resolution analysis.
+        
+        Constructs AI prompts for analyzing if exceptions can be automatically
+        resolved, using either custom templates or the default prompt loader.
+        
+        Args:
+            context (Dict[str, Any]): Raw order and exception context data
+            template (Optional[str]): Optional custom template override
+            
+        Returns:
+            str: Formatted prompt string for AI resolution analysis
+        """
+        if template:
+            return template.format(**context)
+        
+        try:
+            # Use prompt loader with Jinja2 templating
+            return self.prompt_loader.get_automated_resolution_prompt(**context)
+            
+        except (FileNotFoundError, KeyError):
+            # Fallback to inline prompt if external file fails
+            return f"""
+You are an expert logistics automation analyst. Analyze RAW ORDER DATA to determine if this exception can be automatically resolved.
+
+EXCEPTION CONTEXT:
+- Exception ID: {context.get('exception_id', 'unknown')}
+- Order ID: {context.get('order_id', 'unknown')}
+- Reason Code: {context.get('reason_code', 'UNKNOWN')}
+- Status: {context.get('status', 'ACTIVE')}
+
+RAW ORDER DATA:
+{json.dumps(context, indent=2, default=str)}
+
+Analyze if this can be automatically resolved and provide JSON response:
+{{
+    "can_auto_resolve": true/false,
+    "confidence": 0.0-1.0,
+    "automated_actions": ["action1", "action2"],
+    "resolution_strategy": "Step-by-step resolution plan",
+    "success_probability": 0.0-1.0,
+    "reasoning": "Evidence-based analysis from raw data",
+    "risk_assessment": "Low/Medium/High risk factors",
+    "estimated_resolution_time": "X minutes"
+}}
+"""
+
+    def _parse_resolution_response(self, response) -> Dict[str, Any]:
+        """Parse automated resolution response from AI service."""
+        import json
+        
+        try:
+            # If it's already a dict, use it directly
+            if isinstance(response, dict):
+                parsed = response
+            else:
+                # If it's a string, try to parse as JSON
+                parsed = json.loads(response)
+            
+            # Validate required fields
+            required_fields = ["can_auto_resolve", "confidence", "automated_actions", "success_probability"]
+            for field in required_fields:
+                if field not in parsed:
+                    raise ValueError(f"Missing required field: {field}")
+            
+            # Ensure proper types
+            parsed["can_auto_resolve"] = bool(parsed["can_auto_resolve"])
+            parsed["confidence"] = float(parsed["confidence"])
+            parsed["success_probability"] = float(parsed["success_probability"])
+            
+            if not isinstance(parsed["automated_actions"], list):
+                parsed["automated_actions"] = []
+            
+            return parsed
+            
+        except (json.JSONDecodeError, TypeError, ValueError) as e:
+            # Return a default response if parsing fails
+            return {
+                "can_auto_resolve": False,
+                "confidence": 0.0,
+                "automated_actions": [],
+                "resolution_strategy": "Failed to parse AI response",
+                "success_probability": 0.0,
+                "reasoning": f"AI response parsing failed: {str(e)}",
+                "risk_assessment": "High - parsing error",
+                "estimated_resolution_time": "unknown"
             }
 
 

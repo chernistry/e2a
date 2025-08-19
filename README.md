@@ -8,7 +8,7 @@
 > 
 > This is a **demonstration project** showcasing architecture and patterns for a 3PL exception management system. Several core business logic functions are simplified for demo purposes:
 > 
-> - **Automated Exception Resolution**: Uses probabilistic simulation instead of real API integrations (address validation, payment retries)
+> - **AI Automated Exception Resolution**: ✅ **IMPLEMENTED** - Real AI analysis of raw order data with automated action execution (payment retries, address validation, inventory reallocation)
 > - **Billing Calculations**: Simplified 3PL billing logic without complex rate cards and contract-specific pricing
 > - **SLA Detection**: Basic time-based rules without business calendar, warehouse capacity, or order complexity modeling
 > - **Order Analysis**: Detects only obvious test data patterns rather than comprehensive validation
@@ -49,6 +49,7 @@ Includes foundation for Slack integration and realistic Shopify Mock API for dem
 
 - **Real-time SLA Monitoring**: Detect pick, pack, and shipping delays instantly
 - **AI Exception Analyst**: Generate operational and customer-facing narratives using OpenRouter API
+- **AI Automated Resolution**: ✅ **NEW** - Intelligent automation of common exceptions (payment retries, address validation, inventory reallocation) with confidence-based decision making
 - **Invoice Guard**: Nightly invoice validation with auto-adjustments
 - **AI Rule-Lint**: Validate business policies and generate test cases with AI assistance
 - **Slack Integration Foundation**: Basic Slack bot framework with webhook handling and query processing

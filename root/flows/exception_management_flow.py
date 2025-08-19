@@ -25,7 +25,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.storage.db import get_session
 from app.storage.models import ExceptionRecord, OrderEvent
-# Removed problematic imports - using basic functionality
+from app.services.ai_automated_resolution import (
+    analyze_automated_resolution_possibility,
+    execute_automated_actions
+)
 
 
 # ==== EXCEPTION ANALYSIS TASKS ==== #
@@ -284,30 +287,29 @@ async def attempt_automated_resolution(
     tenant: str = "demo-3pl"
 ) -> Dict[str, Any]:
     """
-    Attempt automated resolution for suitable exceptions.
+    Attempt AI-powered automated resolution for suitable exceptions.
     
-    This task implements intelligent automation that can resolve
-    certain types of exceptions without human intervention:
-    - Address corrections
-    - Inventory updates
-    - Payment retries
-    - Simple data fixes
+    This task implements intelligent AI-powered automation that analyzes
+    RAW order data to determine if exceptions can be resolved without
+    human intervention, replacing the previous random simulation with
+    genuine AI analysis.
     
     Args:
         prioritized_exceptions: Output from prioritize_active_exceptions
         tenant: Tenant context
         
     Returns:
-        Dict with automation results
+        Dict with automation results including AI analysis
     """
     logger = get_run_logger()
-    logger.info(f"Attempting automated resolution for tenant {tenant}")
+    logger.info(f"Attempting AI-powered automated resolution for tenant {tenant}")
     
     if not prioritized_exceptions.get('prioritized_lists'):
         return {
             'tenant': tenant,
             'automation_attempts': 0,
             'successful_resolutions': 0,
+            'ai_analyses_performed': 0,
             'results': []
         }
     
@@ -318,30 +320,7 @@ async def attempt_automated_resolution(
     
     automation_results = []
     successful_resolutions = 0
-    
-    # Define automation rules
-    automation_rules = {
-        'ADDRESS_INVALID': {
-            'can_automate': True,
-            'success_rate': 0.7,
-            'action': 'address_validation_service'
-        },
-        'PAYMENT_FAILED': {
-            'can_automate': True,
-            'success_rate': 0.4,
-            'action': 'payment_retry'
-        },
-        'INVENTORY_SHORTAGE': {
-            'can_automate': False,
-            'success_rate': 0.0,
-            'action': 'requires_human_intervention'
-        },
-        'DELIVERY_DELAY': {
-            'can_automate': False,
-            'success_rate': 0.0,
-            'action': 'requires_carrier_coordination'
-        }
-    }
+    ai_analyses_performed = 0
     
     async with get_session() as db:
         for exc_data in all_exceptions:
@@ -358,61 +337,115 @@ async def attempt_automated_resolution(
                 logger.warning(f"Exception {exc_id} not found, skipping")
                 continue
             
-            # Check if this exception type can be automated
-            rule = automation_rules.get(reason_code, {'can_automate': False})
+            # Skip if already resolved
+            if exc.status in ['RESOLVED', 'CLOSED']:
+                continue
             
-            if not rule['can_automate']:
+            try:
+                # AI-powered resolution analysis (NO random simulation!)
+                ai_analysis = await analyze_automated_resolution_possibility(db, exc)
+                ai_analyses_performed += 1
+                
+                logger.info(f"AI analysis for exception {exc.id}: "
+                           f"can_resolve={ai_analysis.get('can_auto_resolve', False)}, "
+                           f"confidence={ai_analysis.get('confidence', 0.0)}")
+                
+                # Check if AI recommends automation with sufficient confidence
+                can_auto_resolve = ai_analysis.get('can_auto_resolve', False)
+                confidence = ai_analysis.get('confidence', 0.0)
+                success_probability = ai_analysis.get('success_probability', 0.0)
+                
+                # Use AI confidence thresholds (not random!)
+                if can_auto_resolve and confidence >= 0.7 and success_probability >= 0.6:
+                    # Execute AI-recommended automated actions
+                    automated_actions = ai_analysis.get('automated_actions', [])
+                    
+                    if automated_actions:
+                        execution_success = await execute_automated_actions(
+                            db, exc, automated_actions
+                        )
+                        
+                        if execution_success:
+                            # Mark exception as resolved
+                            exc.status = 'RESOLVED'
+                            exc.resolved_at = datetime.utcnow()
+                            exc.ops_note = (
+                                f"AI-resolved via {', '.join(automated_actions)} "
+                                f"(confidence: {confidence:.2f}, "
+                                f"success_prob: {success_probability:.2f})"
+                            )
+                            
+                            successful_resolutions += 1
+                            
+                            automation_results.append({
+                                'exception_id': exc.id,
+                                'order_id': exc.order_id,
+                                'reason_code': reason_code,
+                                'automation_attempted': True,
+                                'result': 'resolved',
+                                'ai_analysis': ai_analysis,
+                                'actions_executed': automated_actions
+                            })
+                            
+                            logger.info(f"AI auto-resolved exception {exc.id} ({reason_code}) "
+                                       f"for order {exc.order_id} using {automated_actions}")
+                        else:
+                            automation_results.append({
+                                'exception_id': exc.id,
+                                'order_id': exc.order_id,
+                                'reason_code': reason_code,
+                                'automation_attempted': True,
+                                'result': 'execution_failed',
+                                'ai_analysis': ai_analysis,
+                                'action_required': 'manual_intervention'
+                            })
+                    else:
+                        automation_results.append({
+                            'exception_id': exc.id,
+                            'order_id': exc.order_id,
+                            'reason_code': reason_code,
+                            'automation_attempted': False,
+                            'result': 'no_actions_available',
+                            'ai_analysis': ai_analysis,
+                            'action_required': 'manual_review'
+                        })
+                else:
+                    # AI determined automation not suitable
+                    automation_results.append({
+                        'exception_id': exc.id,
+                        'order_id': exc.order_id,
+                        'reason_code': reason_code,
+                        'automation_attempted': False,
+                        'result': 'ai_not_recommended',
+                        'ai_analysis': ai_analysis,
+                        'action_required': 'manual_intervention'
+                    })
+                    
+            except Exception as e:
+                # Fallback for AI analysis failures
+                logger.warning(f"AI analysis failed for exception {exc.id}: {str(e)}")
                 automation_results.append({
                     'exception_id': exc.id,
                     'order_id': exc.order_id,
                     'reason_code': reason_code,
                     'automation_attempted': False,
-                    'result': 'not_automatable',
-                    'action_required': rule.get('action', 'manual_review')
-                })
-                continue
-            
-            # Simulate automation attempt
-            import random
-            success = random.random() < rule['success_rate']
-            
-            if success:
-                # Mark exception as resolved
-                exc.status = 'RESOLVED'
-                exc.resolved_at = datetime.utcnow()
-                exc.ops_note = f"Auto-resolved via {rule['action']}"
-                
-                successful_resolutions += 1
-                
-                automation_results.append({
-                    'exception_id': exc.id,
-                    'order_id': exc.order_id,
-                    'reason_code': reason_code,
-                    'automation_attempted': True,
-                    'result': 'resolved',
-                    'action_taken': rule['action']
-                })
-                
-                logger.info(f"Auto-resolved exception {exc.id} ({reason_code}) for order {exc.order_id}")
-            else:
-                automation_results.append({
-                    'exception_id': exc.id,
-                    'order_id': exc.order_id,
-                    'reason_code': reason_code,
-                    'automation_attempted': True,
-                    'result': 'failed',
-                    'action_required': 'manual_intervention'
+                    'result': 'ai_analysis_failed',
+                    'error': str(e),
+                    'action_required': 'manual_review'
                 })
         
         await db.commit()
     
-    logger.info(f"Automation complete: {successful_resolutions}/{len(all_exceptions)} exceptions resolved")
+    logger.info(f"AI-powered automation complete: {successful_resolutions}/{len(all_exceptions)} "
+               f"exceptions resolved, {ai_analyses_performed} AI analyses performed")
     
     return {
         'tenant': tenant,
         'automation_attempts': len(all_exceptions),
         'successful_resolutions': successful_resolutions,
+        'ai_analyses_performed': ai_analyses_performed,
         'automation_success_rate': successful_resolutions / len(all_exceptions) if all_exceptions else 0,
+        'ai_analysis_rate': ai_analyses_performed / len(all_exceptions) if all_exceptions else 0,
         'results': automation_results
     }
 
