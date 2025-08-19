@@ -209,13 +209,18 @@ async def send_webhook(topic: str, order: Dict):
 
 # Demo endpoints
 @app.post("/demo/generate-batch")
-async def generate_demo_batch():
-    """Generate a new batch of orders (1001-1999 orders)."""
+async def generate_demo_batch(background_tasks: BackgroundTasks):
+    """Generate a new batch of orders (1001-1999 orders) and send webhooks."""
     batch_size = random.randint(SHOPIFY_DEMO_API_PRODUCE_MIN_ORDERS, SHOPIFY_DEMO_API_PRODUCE_MAX_ORDERS)
     
     print(f"🎯 Manual batch generation requested: {batch_size} orders")
     
     new_orders = generate_batch_orders()
+    
+    # Send webhooks for all new orders
+    print(f"📡 Sending {len(new_orders)} webhooks to API...")
+    for order in new_orders:
+        background_tasks.add_task(send_webhook, "orders/create", order)
     
     # Count problems
     orders_with_problems = sum(1 for o in orders_db.values() if o.get('has_problems'))
@@ -226,6 +231,7 @@ async def generate_demo_batch():
         "total_orders": len(orders_db),
         "orders_with_problems": orders_with_problems,
         "problem_rate": f"{(orders_with_problems/len(orders_db)*100):.1f}%" if orders_db else "0%",
+        "webhooks_queued": len(new_orders),
         "config": {
             "min_orders": SHOPIFY_DEMO_API_PRODUCE_MIN_ORDERS,
             "max_orders": SHOPIFY_DEMO_API_PRODUCE_MAX_ORDERS
