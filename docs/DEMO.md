@@ -22,37 +22,8 @@ return context
 
 ---
 
-### 2. **AI Automated Exception Resolution** ✅ **IMPLEMENTED**
-**File:** `app/services/ai_automated_resolution.py:analyze_automated_resolution_possibility()`
 
-```python
-# Real AI analysis of raw order data
-ai_result = await _perform_ai_resolution_analysis(analysis_context)
-
-# Confidence-based decision making
-if ai_result.get('can_auto_resolve') and ai_result.get('confidence', 0) >= 0.7:
-    success_probability = ai_result.get('success_probability', 0)
-    if success_probability >= 0.6:
-        # Execute automated actions with realistic success rates
-        for action in ai_result.get('automated_actions', []):
-            success = await _execute_automated_action(action, exception_id)
-```
-
-**Current Implementation:** ✅ **FULLY IMPLEMENTED** - Uses genuine AI analysis of raw order data to determine automation possibilities. AI analyzes order events, payment status, address data, and timing patterns to make intelligent decisions about automated resolution.
-
-**Key Features:**
-- **Real AI Analysis**: No preprocessing hints - AI analyzes raw order data
-- **Confidence Thresholds**: ≥0.7 confidence required for automation
-- **Success Probability**: ≥0.6 success probability required for execution  
-- **Realistic Action Execution**: Payment retry (40%), address validation (70%), inventory reallocation (60%)
-- **Proper Fallback**: Human escalation for unsuitable cases (DELIVERY_DELAY)
-- **Comprehensive Testing**: Validated with skeptical testing to ensure genuine AI analysis
-
-**Production Readiness:** This implementation demonstrates production-ready AI decision making patterns and could be extended with real API integrations for payment gateways, address validation services, and inventory management systems.
-
----
-
-### 3. **Billing Operations Calculation**
+### 2. **Billing Operations Calculation**
 **File:** `app/services/billing.py:_calculate_operations_from_events()`
 
 ```python
@@ -74,7 +45,7 @@ if events:
 
 ---
 
-### 4. **SLA Breach Detection Logic**
+### 3. **SLA Breach Detection Logic**
 **File:** `app/services/sla_engine.py:_detect_breaches()`
 
 ```python
@@ -98,7 +69,7 @@ def _check_pick_sla(self, timeline, sla_config):
 
 ---
 
-### 5. **Invoice Validation**
+### 4. **Invoice Validation**
 **File:** `app/services/billing.py:validate_invoice()`
 
 ```python
@@ -121,7 +92,7 @@ if invoice.amount_cents != expected_amount:
 
 ---
 
-### 6. **Order Problem Detection**
+### 5. **Order Problem Detection**
 **File:** `app/services/order_analyzer.py:analyze_order()`
 
 ```python
@@ -219,8 +190,6 @@ return hashlib.md5(signature_data.encode()).hexdigest()
 These implementations are suitable for demonstration purposes:
 
 - **Shopify Mock Generator** - Essential for generating realistic demo data
-- **SQLite database** - Appropriate database choice for demo vs PostgreSQL  
-- **Hardcoded configurations** - Standard practice for demo vs dynamic config
 - **Basic metrics** - Simplified metrics suitable for demo vs full Prometheus integration
 - **Test data generators** - Required for demo functionality
 - **Simplified authentication** - Security complexity not needed for demo
