@@ -219,48 +219,118 @@ Business logic is configured through YAML files:
 
 Changes are loaded automatically on application startup.
 
-## Event Simulator
+## Event Generation & Testing
 
-The project includes a sophisticated event simulator for testing and demonstration:
+The project includes a comprehensive event generation system for testing and demonstration:
 
 ### Features
 
-- **Data Sources**: Olist e-commerce dataset (397K+ orders) or custom NDJSON
-- **Modes**: `push` (realistic streaming) or `replay` (fast batch processing)
-- **Realistic Load**: Configurable events per second, jitter, random bursts
-- **Error Injection**: Simulates duplicates, out-of-order delivery, malformed payloads
-- **Observability**: Prometheus metrics on port 9109
+- **Shopify Mock API**: Realistic e-commerce data generation with automatic webhook integration
+- **Event Streaming**: Configurable order generation with realistic timing
+- **Exception Simulation**: 13% natural exception rate with realistic scenarios
+- **Multi-tenant Support**: Tenant isolation and correlation tracking
 
 ### Usage
 
 ```bash
-# Start realistic event stream (2 EPS)
-make simulate
+# Start demo system with Shopify Mock API
+cd docker
+docker-compose --profile demo up -d
 
-# High-load testing (20 EPS)
-make simulate-fast
+# Generate events using run.sh
+cd root
 
-# Fast replay mode
-make simulate-replay
+# Generate single order
+./run.sh generate single
 
-# View simulator logs
-make simulate-logs
+# Generate batch of orders (1001-1999 orders)
+./run.sh generate batch
 
-# Custom configuration
-EPS=10 WORKERS=6 BAD_RATE=0.05 make simulate
+# Stream orders continuously
+./run.sh generate stream 60    # Stream for 60 seconds
+
+# View system statistics
+./run.sh stats
 ```
+
+### Demo System Access
+
+Once started, access the demo interfaces:
+- **Shopify Mock API**: http://localhost:8090/docs
+- **E²A Dashboard**: http://localhost:3000
+- **API Documentation**: http://localhost:8000/docs
+- **Prefect UI**: http://localhost:4200
+
+### Configuration
+
+The demo system is configured through environment variables:
+```bash
+OCTUP_API_URL=http://localhost:8000     # Target API
+WEBHOOK_DELAY_SECONDS=2                 # Webhook timing
+SHOPIFY_DEMO_API_PRODUCE_MIN_ORDERS=1001  # Batch size range
+SHOPIFY_DEMO_API_PRODUCE_MAX_ORDERS=1999
+```
+
+## Business Process Flows
+
+E²A includes modern Prefect flows that implement realistic business processes:
+
+### Available Flows
+
+1. **Order Processing Pipeline** - Monitors order fulfillment progress and SLA compliance
+2. **Exception Management Pipeline** - Analyzes patterns and attempts automated resolution
+3. **Billing Management Pipeline** - Generates invoices and processes adjustments
+4. **Business Operations Orchestrator** - Coordinates all business processes
+
+### Running Flows
+
+```bash
+# Start Prefect server (if not already running)
+prefect server start
+
+# Start a worker (in another terminal)
+cd root
+prefect worker start --pool default-agent-pool --type process
+
+# Deploy flows
+prefect deploy flows/order_processing_flow.py:order_processing_pipeline -n order-processing -p default-agent-pool
+prefect deploy flows/exception_management_flow.py:exception_management_pipeline -n exception-management -p default-agent-pool
+prefect deploy flows/billing_management_flow.py:billing_management_pipeline -n billing-management -p default-agent-pool
+prefect deploy flows/business_operations_orchestrator.py:business_operations_orchestrator -n business-orchestrator -p default-agent-pool
+
+# Run flows manually
+prefect deployment run 'order-processing-pipeline/order-processing'
+prefect deployment run 'exception-management-pipeline/exception-management'
+prefect deployment run 'billing-management-pipeline/billing-management'
+prefect deployment run 'business-operations-orchestrator/business-orchestrator'
+```
+
+### Flow Configuration
+
+Flows are configured in `prefect.yaml` with default parameters:
+- **Tenant**: demo-3pl
+- **Lookback Hours**: 24 (for order and billing flows)
+- **Analysis Hours**: 168 (for exception management)
 
 ## Running the Application
 
+
 ### Development
 ```bash
-# Start all services
-make up
+# Start all services using run.sh
+./run.sh start
+
+# Or use make commands
+make up                    # Start API only
+make up-local             # Start with local Redis
+make up-demo              # Start with demo system
 
 # View logs
 make logs SERVICE=api
+docker logs <service_name>
 
 # Stop services
+./run.sh stop
 make down
 ```
 

@@ -29,10 +29,21 @@ root/
 │   └── storage/             # Database and cache interaction
 ├── docker/                  # Docker configurations
 ├── docs/                    # Documentation including Slack integration guide
-├── flows/                   # Prefect flow definitions
+├── flows/                   # Prefect business process flow definitions
+│   ├── business_operations_orchestrator.py  # Master coordinator
+│   ├── order_processing_flow.py            # Order fulfillment monitoring
+│   ├── exception_management_flow.py        # Exception analysis & auto-resolution
+│   └── billing_management_flow.py          # Invoice generation & validation
 ├── migrations/              # Alembic database migration scripts
-├── scripts/                 # Event simulator and utilities
+├── scripts/                 # Operational and utility scripts
+│   ├── replay_dlq.py        # DLQ recovery script
+│   ├── generate_invoices.py # Invoice generation script
+│   └── utility/             # Utility scripts
+│       └── deploy_flows.py  # Prefect flow deployment
 ├── tests/                   # Comprehensive test suite
+├── demo/                    # Shopify Mock API demo system
+├── prefect.yaml             # Prefect deployment configuration
+├── run.sh                   # Operational script for common tasks
 └── pyproject.toml           # Project dependencies (Poetry)
 ```
 
@@ -246,34 +257,18 @@ JWT_ACCESS_TOKEN_EXPIRE_MINUTES=30
 
 ## 🛠️ Operational Scripts
 
-E²A includes a comprehensive set of Python scripts for operational tasks, testing, and maintenance.
+E²A includes operational scripts for maintenance, testing, and data management.
 
 ### Core Operational Scripts
 
-#### 🔧 **validate_fixes.py** - System Validation
-Comprehensive validation of the event processing pipeline and fixes.
-
-**Features**:
-- Event processing validation
-- SLA evaluation testing
-- Exception relationship access verification
-- DLQ error handling validation
-- Current system status reporting
-
-**Usage**:
-```bash
-cd root/scripts
-python validate_fixes.py
-```
-
 #### 🔄 **replay_dlq.py** - DLQ Recovery
-Reprocesses failed events from the Dead Letter Queue.
+Reprocesses failed events from the Dead Letter Queue after bug fixes or system updates.
 
 **Features**:
 - Batch processing with configurable sizes
-- Automatic event type detection
+- Automatic event type detection (Shopify, WMS, Carrier)
 - Mock request creation for replay
-- Comprehensive error handling
+- Comprehensive error handling and statistics
 - Progress tracking and reporting
 
 **Usage**:
@@ -287,13 +282,13 @@ python replay_dlq.py --batch-size 10 --max-batches 5
 - `--max-batches`: Maximum batches to process (default: all)
 
 #### 📄 **generate_invoices.py** - Invoice Management
-Generates missing invoices for completed orders with validation.
+Generates missing invoices for completed orders with comprehensive validation.
 
 **Features**:
-- Missing invoice detection
+- Missing invoice detection and generation
 - Tenant-specific backfill operations
 - Dry-run mode for testing
-- Comprehensive validation
+- Comprehensive validation and audit logging
 - Configurable lookback periods
 
 **Usage**:
@@ -303,54 +298,79 @@ python generate_invoices.py --tenant demo-3pl --lookback-hours 168
 python generate_invoices.py --backfill --tenant demo-3pl --days-back 30
 ```
 
-### Event Simulator Suite
-
-#### 🎭 **event_simulator/** - Advanced Testing
-Comprehensive event simulation for API robustness testing.
-
-**Operating Modes**:
-```bash
-# Realistic simulation (default)
-make simulate              # 6 EPS, realistic delays
-
-# Stress testing
-make simulate-fast         # 20 EPS, more bursts
-
-# Chaos testing
-./run.sh stream chaos      # High error rates, malformed data
-
-# Replay mode
-make simulate-replay       # From prepared events
-```
-
-**Configuration**:
-```yaml
-EPS: "6"                    # Events per second
-WORKERS: "4"               # Parallel workers
-JITTER_MS: "200"           # Random delay ±200ms
-BURST_CHANCE: "0.05"       # 5% chance of burst
-DUP_RATE: "0.03"           # 3% duplicates
-OOO_RATE: "0.02"           # 2% out-of-order
-BAD_RATE: "0.01"           # 1% broken events
-SEED: "42"                 # For reproducibility
-```
-
-**Advanced Chaos Injection**:
-- Malformed payloads and encoding issues
-- Timestamp anomalies and field corruption
-- Size anomalies and nested structures
-- SQL injection and XSS payloads
+**Options**:
+- `--tenant`: Specific tenant to process
+- `--lookback-hours`: How far back to look for completed orders (default: 168h = 7 days)
+- `--backfill`: Enable backfill mode for historical data
+- `--days-back`: Days back for backfill operations (default: 30)
+- `--dry-run`: Preview operations without creating invoices
 
 ### Utility Scripts
 
-#### 🚀 **deploy_flows.py** - Prefect Management
-Manages Prefect workflow deployment and configuration.
+#### 🚀 **deploy_flows.py** - Prefect Flow Management
+Manages deployment of Prefect business process workflows to the Prefect server.
 
 **Features**:
 - Automatic flow deployment
 - Environment-specific configurations
 - Health checks and validation
 - Rollback capabilities
+
+**Usage**:
+```bash
+cd root/scripts/utility
+python deploy_flows.py
+```
+
+### Operational Management Script
+
+#### 🎯 **run.sh** - System Operations
+Comprehensive operational script for common system management tasks.
+
+**Features**:
+- Service lifecycle management (start, stop, status)
+- Event generation and testing
+- Database operations (reset, migrations)
+- System demonstration and statistics
+
+**Usage**:
+```bash
+# Service management
+./run.sh start          # Start all services
+./run.sh stop           # Stop all services
+./run.sh status         # Show service status
+
+# Event generation
+./run.sh generate single    # Generate one order
+./run.sh generate batch     # Generate 1001-1999 orders
+./run.sh generate stream 60 # Stream orders for 60 seconds
+
+# System operations
+./run.sh demo           # Run system demonstration
+./run.sh stats          # Show system statistics
+./run.sh reset          # Full database reset (WARNING: deletes ALL data)
+```
+
+### Demo System
+
+#### 🎭 **demo/** - Shopify Mock API
+Realistic e-commerce testing suite with comprehensive data generation.
+
+**Components**:
+- **Shopify Mock API**: Complete API simulation with realistic endpoints
+- **Automatic Webhooks**: Real-time integration with E²A platform
+- **Exception Simulation**: 13% natural exception rate with realistic scenarios
+- **Multi-tenant Support**: Tenant isolation and correlation tracking
+
+**Usage**:
+```bash
+# Start demo system
+cd docker
+docker-compose --profile demo up -d
+
+# Access demo API
+open http://localhost:8090/docs
+```
 
 ## 📈 Monitoring & Maintenance
 
@@ -408,11 +428,28 @@ cp -r app/business/policies/ policies.backup.$(date +%Y%m%d)
 
 ## 🔄 Automation & Scheduling
 
+### Prefect Business Process Flows
+
+**Current Deployments** (see `prefect.yaml`):
+```bash
+# Business process flows
+prefect deployment run 'order-processing-pipeline/order-processing'
+prefect deployment run 'exception-management-pipeline/exception-management'
+prefect deployment run 'billing-management-pipeline/billing-management'
+prefect deployment run 'business-operations-orchestrator/business-orchestrator'
+```
+
+**Flow Descriptions**:
+- **Order Processing**: Hourly monitoring of order fulfillment progress and SLA compliance
+- **Exception Management**: Every 4 hours analysis and automated resolution of exceptions
+- **Billing Management**: Daily invoice generation and validation with adjustments
+- **Business Orchestrator**: On-demand coordination of all business processes
+
 ### Cron Jobs
 
 **Recommended Schedule**:
 ```bash
-# Nightly invoice generation (2 AM)
+# Manual script execution (if not using Prefect)
 0 2 * * * cd /path/to/octup/root/scripts && python generate_invoices.py
 
 # DLQ replay every 4 hours
@@ -420,6 +457,9 @@ cp -r app/business/policies/ policies.backup.$(date +%Y%m%d)
 
 # Health check every 5 minutes
 */5 * * * * curl -f http://localhost:8000/health || echo "API down"
+
+# System statistics (optional)
+0 */6 * * * cd /path/to/octup/root && ./run.sh stats
 ```
 
 ### CI/CD Integration
@@ -456,19 +496,24 @@ jobs:
 
 ```bash
 # Check system status
-make status
+./run.sh status
 
 # View service logs
 make logs
+docker logs <service_name>
 
 # Monitor metrics
-make metrics
+curl http://localhost:8000/metrics
 
 # Test endpoints
-make test-api
+curl http://localhost:8000/health
+curl http://localhost:8000/api/health
 
-# Validate fixes
-make validate
+# System statistics
+./run.sh stats
+
+# Generate test data
+./run.sh generate batch
 ```
 
 ### Emergency Procedures
@@ -476,30 +521,30 @@ make validate
 **Service Recovery**:
 ```bash
 # Restart all services
-make restart
+./run.sh stop && ./run.sh start
 
-# Restart specific service
-make restart-api
-make restart-dashboard
+# Restart specific services
+make down && make up
 
-# Emergency mode (minimal services)
-make emergency-mode
+# Check service status
+./run.sh status
 ```
 
 **Data Recovery**:
 ```bash
 # Restore from backup
-make restore-backup
+pg_dump -h localhost -U postgres -d octup > backup.sql
+psql -h localhost -U postgres -d octup < backup.sql
 
 # Replay failed events
-make replay-dlq
+cd scripts && python replay_dlq.py
 
 # Regenerate invoices
-make regenerate-invoices
+cd scripts && python generate_invoices.py --tenant demo-3pl
 ```
 
 ---
 
-**Last Updated**: 2025-01-17  
+**Last Updated**: 2025-08-19  
 **Version**: 1.0.0  
 **Maintainer**: E²A Team
