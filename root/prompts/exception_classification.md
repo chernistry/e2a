@@ -1,23 +1,25 @@
-You are an expert logistics operations analyst. Analyze this RAW ORDER DATA to identify what went wrong and classify the issue.
+You are an expert logistics operations analyst. Analyze RAW ORDER DATA to classify the operational issue.
 
-**IMPORTANT: You are analyzing RAW order data, NOT pre-classified exceptions. Determine what the actual problem is based on the data.**
+**CRITICAL: Analyze raw data, NOT pre-classified exceptions. Determine the actual problem from evidence.**
 
-**Required JSON Response Format:**
-```json
-{
-  "label": "EXACT_ENUM_VALUE",
-  "confidence": 0.85,
-  "root_cause_analysis": "Your analysis of what actually went wrong based on the raw data",
-  "ops_note": "Technical analysis with specific actions for this case",
-  "client_note": "Customer explanation for this specific situation",
-  "recommendations": "Specific prevention measures for this type of issue",
-  "priority_factors": ["actual", "factors", "from", "this", "case"],
-  "reasoning": "Your logic for determining this classification from raw data"
-}
-```
+**Classification Logic:**
 
-**Valid Labels (choose the MOST APPROPRIATE one):**
-PICK_DELAY, PACK_DELAY, CARRIER_ISSUE, STOCK_MISMATCH, ADDRESS_ERROR, ADDRESS_INVALID, SYSTEM_ERROR, DELIVERY_DELAY, DAMAGED_PACKAGE, CUSTOMER_UNAVAILABLE, PAYMENT_FAILED, INVENTORY_SHORTAGE, MISSING_SCAN, SHIP_DELAY, OTHER
+**WAREHOUSE ISSUES** (order stuck in warehouse):
+- PICK_DELAY: Last warehouse event "inventory_check_started" but no "pick_started"
+- PACK_DELAY: Last event "pick_completed" but no "pack_started"  
+- INVENTORY_SHORTAGE: line_items quantity > inventory_snapshot available_quantity
+- STOCK_MISMATCH: Inventory count discrepancies
+- SYSTEM_ERROR: No warehouse events for days
+
+**SHIPPING ISSUES** (order left warehouse):
+- SHIP_DELAY: Delay handing off to carrier
+- CARRIER_ISSUE: Carrier pickup/transit problems
+- DELIVERY_DELAY: Final delivery delays
+
+**OTHER ISSUES**:
+- PAYMENT_FAILED: payment_gateway_response "failed" or financial_status issues
+- ADDRESS_INVALID: Invalid postal codes (00000, 99999)
+- ADDRESS_ERROR: Undeliverable addresses
 
 **Raw Order Data:**
 - Order ID: {{ order_id }}
@@ -63,44 +65,28 @@ PICK_DELAY, PACK_DELAY, CARRIER_ISSUE, STOCK_MISMATCH, ADDRESS_ERROR, ADDRESS_IN
 - Shipping Lines: {{ shipping_lines }}
 {%- endif %}
 
-**Your Analysis Task:**
-Analyze ALL the raw data above and determine:
+**Analysis Steps:**
+1. Check payment_gateway_response for "failed" → PAYMENT_FAILED
+2. Compare line_items vs inventory_snapshot quantities → INVENTORY_SHORTAGE  
+3. Check warehouse_events sequence for gaps → PICK_DELAY/PACK_DELAY
+4. Check shipping_address for invalid postal codes → ADDRESS_INVALID
+5. Determine if issue is in warehouse or shipping pipeline
 
-1. **What is the actual problem?** 
-   - Payment gateway failures or pending status → PAYMENT_FAILED
-   - Invalid addresses or postal codes → ADDRESS_ERROR or ADDRESS_INVALID  
-   - Warehouse delays (stuck in pick/pack) → PICK_DELAY, PACK_DELAY
-   - Shipping delays (left warehouse but delayed) → SHIP_DELAY, CARRIER_ISSUE, DELIVERY_DELAY
-   - Inventory issues (not enough stock) → INVENTORY_SHORTAGE or STOCK_MISMATCH
-   - System failures or missing events → SYSTEM_ERROR or MISSING_SCAN
+**Required JSON Response:**
+```json
+{
+  "label": "EXACT_ENUM_VALUE",
+  "confidence": 0.85,
+  "root_cause_analysis": "What went wrong based on evidence",
+  "ops_note": "Technical actions for operations team",
+  "client_note": "Customer-friendly explanation",
+  "recommendations": "Prevention measures",
+  "priority_factors": ["specific", "factors", "from", "data"],
+  "reasoning": "Step-by-step logic: 1) Checked X, found Y 2) Analyzed Z..."
+}
+```
 
-2. **What evidence supports your conclusion?**
-   - payment_gateway_response with "failed" status indicates payment failure
-   - inventory_snapshot vs line_items quantity mismatch indicates stock shortage
-   - warehouse_events showing stuck processes indicate fulfillment delays
-   - shipping_address with invalid postal codes indicates address problems
-   - fulfillment_status "pending" for days indicates operational delays
+**Valid Labels:**
+PICK_DELAY, PACK_DELAY, CARRIER_ISSUE, STOCK_MISMATCH, ADDRESS_ERROR, ADDRESS_INVALID, SYSTEM_ERROR, DELIVERY_DELAY, DAMAGED_PACKAGE, CUSTOMER_UNAVAILABLE, PAYMENT_FAILED, INVENTORY_SHORTAGE, MISSING_SCAN, SHIP_DELAY, OTHER
 
-3. **Analyze timing and patterns:**
-   - Compare created_at vs updated_at timestamps to detect delays
-   - Look at warehouse_events to see where the order got stuck
-   - Check inventory_snapshot against line_items to find shortages
-   - Examine payment_gateway_response for actual failure reasons
-
-4. **How severe is this issue?**
-   - High-value orders are more critical
-   - Long delays are more severe  
-   - Payment failures need immediate attention
-   - Inventory shortages affect multiple orders
-
-**Analysis Guidelines:**
-- Base your classification ONLY on the raw data provided above
-- Don't assume pre-existing classifications or reason codes
-- Look for patterns and mismatches in the data that indicate specific problems
-- Consider ALL data fields, not just status fields
-- Provide specific evidence from the data for your classification
-- If you see inventory_snapshot and line_items, compare quantities
-- If you see warehouse_events, analyze the event sequence for gaps
-- If you see payment_gateway_response, check for failure indicators
-
-Analyze the raw data comprehensively and determine what actually went wrong.
+Analyze the data step-by-step and classify the issue.
