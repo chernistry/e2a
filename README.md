@@ -20,8 +20,7 @@
 > This project is currently in active development. The UI dashboard may display mock/simulated data for demonstration purposes. Real production data integration is being implemented. Please refer to the [Quick Start Guide](docs/QUICKSTART.md) for current development status and known limitations.
 
 E²A is an AI-powered SLA monitoring and invoice validation tool for logistics. It watches order events, catches SLA breaches in real-time, generates AI explanations, and validates invoices nightly with auto-adjustments.
-Ready for [RAG+Slack](https://github.com/chernistry/meulex/) integration.
-Equipped with realistic Shopify Mock API for (magic) realism.
+Includes foundation for Slack integration and realistic Shopify Mock API for demonstration.
 
 ![E²A Dashboard](assets/scr_dashboard.png)
 
@@ -51,7 +50,8 @@ Equipped with realistic Shopify Mock API for (magic) realism.
 - **AI Exception Analyst**: Generate operational and customer-facing narratives using OpenRouter API
 - **Invoice Guard**: Nightly invoice validation with auto-adjustments
 - **AI Rule-Lint**: Validate business policies and generate test cases with AI assistance
-- **Slack Integration Ready**: Foundation for intelligent Slack bot with RAG queries
+- **Slack Integration Foundation**: Basic Slack bot framework with webhook handling and query processing
+- **RAG Service Foundation**: Placeholder RAG service ready for vector database integration (compatible with [Meulex](https://github.com/chernistry/meulex/) RAG stack)
 - **Resilience**: Circuit breakers, Dead Letter Queue (DLQ), retry policies, replay, health monitoring
 - **Real-Time Dashboard**: Next.js 15 dashboard with live metrics, monitoring, AI insights
 - **Shopify Mock API Demo**: Realistic e-commerce data generation with automatic webhook integration and exception simulation
@@ -123,6 +123,7 @@ AI_SAMPLING_SEVERITY: important_only
 **JSON Extraction**: Robust parsing with fallback mechanisms for malformed AI responses  
 **Error Handling**: Graceful degradation with rule-based fallbacks
 **Cost Control**: Daily token budgets and request sampling based on severity 
+**RAG Integration**: Foundation compatible with vector databases (Qdrant, Pinecone) and RAG frameworks like [Meulex](https://github.com/chernistry/meulex/) for enhanced Slack bot capabilities 
 
 
 ## Architecture
@@ -230,7 +231,6 @@ graph TD
     
     subgraph "External Integrations"
         SLACK_API[Slack API]
-        MEULEX[Meulex RAG System]
         SHOPIFY_MOCK[Shopify Mock API]
     end
     
@@ -244,7 +244,6 @@ graph TD
     API --> PREFECT
     SLACK --> RAG
     RAG --> AI_ANALYST
-    RAG -.-> MEULEX
     
     PREFECT --> ORDER_FLOW
     PREFECT --> EXCEPTION_FLOW
