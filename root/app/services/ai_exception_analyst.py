@@ -243,10 +243,10 @@ def _get_cache_key(exception: ExceptionRecord) -> str:
 
 def _prepare_ai_context(exception: ExceptionRecord) -> Dict[str, Any]:
     """
-    Prepare RAW ORDER DATA for AI analysis.
+    Prepare TRULY RAW ORDER DATA for AI analysis.
     
-    Builds context with raw order data instead of pre-classified reason codes,
-    allowing AI to perform genuine analysis and classification.
+    Passes ALL available raw data to AI without preprocessing, calculations,
+    or hints. The AI must do genuine analysis from scratch.
     
     DEMO LIMITATION: No PII redaction applied. In production, implement proper
     PII redaction or use isolated AI environments.
@@ -255,7 +255,7 @@ def _prepare_ai_context(exception: ExceptionRecord) -> Dict[str, Any]:
         exception (ExceptionRecord): Exception record containing raw order data
         
     Returns:
-        Dict[str, Any]: Raw order data for AI analysis
+        Dict[str, Any]: Complete raw order data for AI analysis
     """
     # Start with basic order identification
     context = {
@@ -264,72 +264,30 @@ def _prepare_ai_context(exception: ExceptionRecord) -> Dict[str, Any]:
         "created_at": exception.created_at.isoformat() if exception.created_at else None
     }
     
-    # Extract RAW ORDER DATA from context_data (this should contain original order data)
+    # Pass ALL RAW DATA from context_data without filtering or preprocessing
     if exception.context_data:
-        # Financial data
-        if "financial_status" in exception.context_data:
-            context["financial_status"] = exception.context_data["financial_status"]
-        if "payment_issues" in exception.context_data:
-            context["payment_issues"] = exception.context_data["payment_issues"]
-        if "total_price" in exception.context_data:
-            context["total_price"] = exception.context_data["total_price"]
-        if "currency" in exception.context_data:
-            context["currency"] = exception.context_data["currency"]
-            
-        # Fulfillment data
-        if "fulfillment_status" in exception.context_data:
-            context["fulfillment_status"] = exception.context_data["fulfillment_status"]
-        if "updated_at" in exception.context_data:
-            context["updated_at"] = exception.context_data["updated_at"]
-            
-        # Address data - DEMO: No redaction applied
-        if "shipping_address" in exception.context_data:
-            context["shipping_address"] = exception.context_data["shipping_address"]
-        if "billing_address" in exception.context_data:
-            context["billing_address"] = exception.context_data["billing_address"]
-            
-        # Customer data - DEMO: No redaction applied
-        if "customer" in exception.context_data:
-            context["customer"] = exception.context_data["customer"]
-            
-        # Line items
-        if "line_items" in exception.context_data:
-            context["line_items"] = exception.context_data["line_items"]
-            
-        # Delivery data
-        if "estimated_delivery_date" in exception.context_data:
-            context["estimated_delivery_date"] = exception.context_data["estimated_delivery_date"]
-        if "shipping_lines" in exception.context_data:
-            context["shipping_lines"] = exception.context_data["shipping_lines"]
-            
-        # Calculate fulfillment delay if we have timestamps
-        if "created_at" in exception.context_data and "updated_at" in exception.context_data:
-            try:
-                from datetime import datetime
-                created = datetime.fromisoformat(exception.context_data["created_at"].replace('Z', '+00:00'))
-                updated = datetime.fromisoformat(exception.context_data["updated_at"].replace('Z', '+00:00'))
-                delay_hours = (updated - created).total_seconds() / 3600
-                context["fulfillment_delay_hours"] = round(delay_hours, 1)
-            except:
-                pass
+        # Pass EVERYTHING - let AI decide what's relevant
+        for key, value in exception.context_data.items():
+            # Skip any pre-classified fields that would bias the AI
+            if key not in ["reason_code", "severity", "classification", "ai_label"]:
+                context[key] = value
     
-    # Add timing context for analysis
-    if exception.created_at:
-        context.update({
-            "hour_of_day": exception.created_at.hour,
-            "day_of_week": exception.created_at.strftime('%A'),
-            "is_weekend": exception.created_at.weekday() >= 5,
-            "is_peak_hours": 14 <= exception.created_at.hour <= 17,
-            "is_morning_rush": 8 <= exception.created_at.hour <= 11
-        })
+    # DO NOT calculate anything for the AI - that's their job!
+    # REMOVED: fulfillment_delay_hours calculation
+    # REMOVED: is_peak_hours, is_weekend calculations  
+    # REMOVED: payment_issues flag filtering
+    
+    # The AI should analyze raw timestamps, not pre-calculated delays
+    # The AI should detect payment issues from gateway responses, not flags
+    # The AI should compare inventory vs line items, not rely on hints
     
     # DO NOT include reason_code - let AI determine it from raw data!
-    # Remove any pre-classified data that would bias the AI
     context.pop("reason_code", None)
-    context.pop("severity", None)
+    context.pop("severity", None) 
     context.pop("classification", None)
+    context.pop("ai_label", None)
     
-    # DEMO: Return raw context without PII redaction
+    # DEMO: Return completely raw context without PII redaction
     return context
 
 
