@@ -1,41 +1,46 @@
-Act as a logistics QA auditor. Return one JSON object only (no markdown). 
+Act as a logistics operations analyst. Perform root cause analysis and return one JSON object only (no markdown).
 
 **Schema:**
 ```json
 {
-  "label": "PICK_DELAY|PACK_DELAY|CARRIER_ISSUE|STOCK_MISMATCH|ADDRESS_ERROR|SYSTEM_ERROR|OTHER",
+  "label": "{{ exception_type }}",
   "confidence": 0.00,
-  "ops_note": "<=200 words",
-  "client_note": "<=100 words", 
-  "reasoning": "<=30 words"
+  "root_cause_analysis": "<=150 words - WHY this happened",
+  "ops_note": "<=200 words - technical analysis with actions",
+  "client_note": "<=100 words - customer-friendly explanation", 
+  "recommendations": "<=100 words - prevention measures",
+  "priority_factors": ["list", "of", "key", "factors"],
+  "reasoning": "<=50 words - analysis logic"
 }
 ```
 
-**Inputs:**
-- `reason_code`, `order_id_suffix`, `tenant` (strings)
-- `duration_minutes`, `sla_minutes`, `delay_minutes` (numbers)
-
 **Context:**
-- Reason Code: {{ reason_code }}
-- Order ID: {{ order_id_suffix }}
+- Exception: {{ exception_type }}
+- Order: {{ order_id_suffix }}
 - Tenant: {{ tenant }}
-- Duration: {{ duration_minutes }} minutes
-- Expected: {{ sla_minutes }} minutes
-- Delay: {{ delay_minutes }} minutes
+- Delay: {{ delay_minutes }} min ({{ delay_percentage }}% over SLA)
+- Time: {{ hour_of_day }}:00 on {{ day_of_week }}
+- Peak Hours: {{ is_peak_hours }}
+- Weekend: {{ is_weekend }}
 
-**Method**
+**Analysis Method:**
 
-Validate inputs. If any numeric is missing/NaN/negative or mutually inconsistent (e.g., delay_minutes ≠ max(duration_minutes - sla_minutes, 0)), choose "SYSTEM_ERROR", confidence ≤ 0.40.
+1. **Root Cause Analysis**: Determine WHY this happened based on:
+   - Timing patterns (peak hours suggest capacity issues)
+   - Delay severity (>50% indicates systemic problems)
+   - Operational context (weekends = reduced staffing)
 
-Classify using reason_code and timing:
-- delay_minutes > 0 with picking/packing → PICK_DELAY/PACK_DELAY
-- carrier codes/transit issues → CARRIER_ISSUE
-- stock/availability → STOCK_MISMATCH
-- address/verification → ADDRESS_ERROR
-- else → OTHER
+2. **Priority Assessment**: Consider:
+   - Business impact and urgency
+   - Customer tier and order value
+   - Time sensitivity and SLA criticality
 
-Confidence: two decimals; increase with evidence agreement; decrease on ambiguity.
+3. **Recommendations**: Provide specific, actionable prevention measures
 
-Notes: ops_note = cause, impact, verifiable next actions; client_note = reassuring, plain language, no internal jargon, no blame.
+**Examples:**
+- Peak hour delays → capacity constraints → dynamic staffing
+- Weekend delays → reduced staffing → weekend coverage plans  
+- High delay % → systemic issue → process review needed
+- Recurring patterns → root cause → preventive measures
 
-No chain-of-thought; no IDs beyond order_id_suffix.
+Use the exact exception_type as label. Focus on actionable insights, not just description.

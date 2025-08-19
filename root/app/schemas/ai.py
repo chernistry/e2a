@@ -13,17 +13,28 @@ class ExceptionLabel(str, Enum):
     CARRIER_ISSUE = "CARRIER_ISSUE"
     STOCK_MISMATCH = "STOCK_MISMATCH"
     ADDRESS_ERROR = "ADDRESS_ERROR"
+    ADDRESS_INVALID = "ADDRESS_INVALID"  # Added for order analyzer
     SYSTEM_ERROR = "SYSTEM_ERROR"
+    DELIVERY_DELAY = "DELIVERY_DELAY"  # Added for order analyzer
+    DAMAGED_PACKAGE = "DAMAGED_PACKAGE"  # Added for order analyzer
+    CUSTOMER_UNAVAILABLE = "CUSTOMER_UNAVAILABLE"  # Added for order analyzer
+    PAYMENT_FAILED = "PAYMENT_FAILED"  # Added for order analyzer
+    INVENTORY_SHORTAGE = "INVENTORY_SHORTAGE"  # Added for order analyzer
+    MISSING_SCAN = "MISSING_SCAN"  # Added for SLA engine
+    SHIP_DELAY = "SHIP_DELAY"  # Added for SLA engine
     OTHER = "OTHER"
 
 
 class AIExceptionAnalysis(BaseModel):
-    """AI analysis result for exceptions."""
+    """AI root cause analysis result for exceptions."""
     
     label: ExceptionLabel
     confidence: float = Field(..., ge=0.0, le=1.0)
+    root_cause_analysis: Optional[str] = Field(None, max_length=1000, description="Root cause analysis")
     ops_note: str = Field(..., max_length=2000)
     client_note: str = Field(..., max_length=1000)
+    recommendations: Optional[str] = Field(None, max_length=500, description="Prevention recommendations")
+    priority_factors: Optional[List[str]] = Field(None, description="Key priority factors")
     reasoning: Optional[str] = Field(None, max_length=1000)
     
     class Config:
@@ -32,9 +43,12 @@ class AIExceptionAnalysis(BaseModel):
             "example": {
                 "label": "PICK_DELAY",
                 "confidence": 0.85,
-                "ops_note": "Pick operation exceeded 120-minute SLA by 45 minutes. Station PICK-01 reported high volume during peak hours.",
-                "client_note": "Your order is taking longer than expected to pick. We're working to get it out soon.",
-                "reasoning": "Based on timing analysis and station capacity data"
+                "root_cause_analysis": "Pick delay occurred during peak hours (3 PM) with 50% SLA overrun. Pattern suggests capacity constraints during afternoon rush when order volume peaks.",
+                "ops_note": "Pick operation exceeded 120-minute SLA by 60 minutes during peak hours. Investigate station capacity and consider dynamic staffing adjustments for 2-5 PM window.",
+                "client_note": "Your order is taking longer than expected due to high volume. We're prioritizing it and will update you shortly.",
+                "recommendations": "Implement dynamic staffing for peak hours, consider priority queues for high-value orders, monitor capacity utilization patterns",
+                "priority_factors": ["peak_hours", "sla_overrun_50_percent", "capacity_constraint"],
+                "reasoning": "Timing and delay percentage indicate systemic capacity issue"
             }
         }
 

@@ -219,6 +219,47 @@ class AIClient:
                 raise
 
 
+    async def get_generation_stats(self, generation_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Get detailed cost and usage statistics for a specific generation.
+        
+        Uses OpenRouter's generation stats API to get precise cost breakdown,
+        cache usage, and detailed token analysis for a completed request.
+        
+        Args:
+            generation_id (str): Generation ID returned from OpenRouter API
+            
+        Returns:
+            Optional[Dict[str, Any]]: Detailed generation statistics or None if failed
+        """
+        if not generation_id or not self.api_key:
+            return None
+            
+        try:
+            headers = {
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json"
+            }
+            
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                response = await client.get(
+                    f"{self.base_url.replace('/chat/completions', '')}/generation?id={generation_id}",
+                    headers=headers
+                )
+                
+                if response.status_code == 200:
+                    stats = response.json()
+                    print(f"📊 Detailed generation stats for {generation_id}: {stats}")
+                    return stats
+                else:
+                    print(f"⚠️ Failed to get generation stats: {response.status_code}")
+                    return None
+                    
+        except Exception as e:
+            print(f"❌ Error getting generation stats: {e}")
+            return None
+
+
     # ==== INTERNAL HELPER METHODS ==== #
 
 
@@ -261,7 +302,11 @@ class AIClient:
             ],
             "response_format": {"type": "json_object"},
             "temperature": 0.2,
-            "max_tokens": 8000
+            "max_tokens": 8000,
+            # Enable detailed usage accounting from OpenRouter
+            "usage": {
+                "include": True
+            }
         }
         
         print(f"📤 Request body: {json.dumps(body, indent=2)[:500]}...")
@@ -283,40 +328,66 @@ class AIClient:
                 data = response.json()
                 print(f"📥 Response data keys: {list(data.keys())}")
                 
-                # Extract content and usage
+                # Extract content and usage with detailed cost tracking
                 content = data["choices"][0]["message"]["content"]
                 usage = data.get("usage", {})
+                generation_id = data.get("id")  # OpenRouter generation ID for detailed stats
                 
                 print(f"📊 Usage: {usage}")
+                print(f"🆔 Generation ID: {generation_id}")
                 print(f"📝 Content preview: {content[:200]}...")
                 
+                # Extract real token counts from OpenRouter
+                prompt_tokens = usage.get("prompt_tokens", 0)
+                completion_tokens = usage.get("completion_tokens", 0)
+                total_tokens = usage.get("total_tokens", prompt_tokens + completion_tokens)
+                
+                # Extract real cost data from OpenRouter (if available)
+                # OpenRouter returns cost in credits/USD
+                actual_cost = usage.get("cost", 0)  # Cost in USD
+                actual_cost_cents = int(actual_cost * 100) if actual_cost else 0
+                
                 # Update token tracking
-                total_tokens = usage.get("total_tokens", 100)  # Estimate if not provided
                 self.daily_tokens_used += total_tokens
                 
-                print(f"🔢 Tokens used: {total_tokens}, Daily total: {self.daily_tokens_used}/{self.max_daily_tokens}")
+                print(f"🔢 Tokens - Prompt: {prompt_tokens}, Completion: {completion_tokens}, Total: {total_tokens}")
+                print(f"💰 Real cost from OpenRouter: ${actual_cost:.6f} ({actual_cost_cents} cents)")
+                print(f"📈 Daily total: {self.daily_tokens_used}/{self.max_daily_tokens}")
                 
-                # Update metrics
+                # Update metrics with real data
                 ai_tokens_total.labels(
                     provider=self.provider,
                     model=self.model,
                     type="prompt"
-                ).inc(usage.get("prompt_tokens", 50))
+                ).inc(prompt_tokens)
                 
                 ai_tokens_total.labels(
                     provider=self.provider,
                     model=self.model,
                     type="completion"
-                ).inc(usage.get("completion_tokens", 50))
+                ).inc(completion_tokens)
                 
-                # Estimate cost (rough approximation)
-                estimated_cost_cents = max(1, total_tokens // 100)
-                ai_cost_cents_total.labels(
-                    provider=self.provider,
-                    model=self.model
-                ).inc(estimated_cost_cents)
+                # Use real cost if available, otherwise fallback to estimation
+                if actual_cost_cents > 0:
+                    ai_cost_cents_total.labels(
+                        provider=self.provider,
+                        model=self.model
+                    ).inc(actual_cost_cents)
+                    print(f"💰 Using real cost: {actual_cost_cents} cents")
+                else:
+                    # Fallback estimation for models that don't return cost
+                    estimated_cost_cents = max(1, total_tokens // 100)
+                    ai_cost_cents_total.labels(
+                        provider=self.provider,
+                        model=self.model
+                    ).inc(estimated_cost_cents)
+                    print(f"💰 Using estimated cost: {estimated_cost_cents} cents (real cost not available)")
                 
-                print(f"💰 Estimated cost: {estimated_cost_cents} cents")
+                # Store generation ID for potential detailed analysis later
+                if generation_id:
+                    print(f"🔍 Generation ID {generation_id} available for detailed cost analysis")
+                    # Could store this for later detailed cost analysis via:
+                    # GET https://openrouter.ai/api/v1/generation?id={generation_id}
                 
                 # Return raw content for robust parsing
                 return content
@@ -371,24 +442,42 @@ class AIClient:
         except (FileNotFoundError, KeyError):
             # Fallback to inline prompt if external file fails
             return f"""
-Analyze this logistics exception and provide a JSON response with the following structure:
+You are a logistics operations analyst. Analyze this exception and provide root cause analysis with actionable insights.
+
+EXCEPTION DATA:
+- Type: {context.get('exception_type', 'UNKNOWN')}
+- Order: {context.get('order_id_suffix', 'XXX')}
+- Tenant: {context.get('tenant', 'unknown')}
+- Severity: {context.get('severity', 'UNKNOWN')}
+- Delay: {context.get('delay_minutes', 0)} minutes ({context.get('delay_percentage', 0):.1f}% over SLA)
+- Time: {context.get('hour_of_day', 0)}:00 on {context.get('day_of_week', 'Unknown')}
+- Peak Hours: {context.get('is_peak_hours', False)}
+- Weekend: {context.get('is_weekend', False)}
+
+Provide JSON response:
 {{
-    "label": "PICK_DELAY|PACK_DELAY|CARRIER_ISSUE|STOCK_MISMATCH|ADDRESS_ERROR|SYSTEM_ERROR|OTHER",
+    "label": "{context.get('exception_type', 'OTHER')}",
     "confidence": 0.0-1.0,
-    "ops_note": "Technical note for operations team (max 200 words)",
-    "client_note": "Customer-friendly explanation (max 100 words)",
-    "reasoning": "Brief explanation of classification logic"
+    "root_cause_analysis": "Analyze WHY this happened based on timing, patterns, and context (max 150 words)",
+    "ops_note": "Technical analysis with specific actions for ops team (max 200 words)",
+    "client_note": "Customer-friendly explanation without internal details (max 100 words)",
+    "recommendations": "Specific actionable recommendations to prevent recurrence (max 100 words)",
+    "priority_factors": ["List", "key", "factors", "that", "make", "this", "high/low", "priority"],
+    "reasoning": "Brief explanation of analysis logic (max 50 words)"
 }}
 
-Exception Context:
-- Reason Code: {context.get('reason_code', 'UNKNOWN')}
-- Order ID: {context.get('order_id_suffix', 'XXX')}
-- Tenant: {context.get('tenant', 'unknown')}
-- Duration: {context.get('duration_minutes', 0)} minutes
-- Expected: {context.get('sla_minutes', 0)} minutes
-- Delay: {context.get('delay_minutes', 0)} minutes
+ANALYSIS GUIDELINES:
+- Consider timing patterns (peak hours, weekends, morning rush)
+- Analyze delay severity and business impact
+- Provide specific, actionable recommendations
+- Focus on prevention, not just reaction
+- Consider operational context and constraints
 
-Provide actionable insights while maintaining customer confidence.
+Example insights:
+- Peak hour delays suggest capacity issues
+- Weekend delays may indicate reduced staffing
+- High-value delays need priority handling
+- Recurring patterns suggest systemic issues
 """
 
 

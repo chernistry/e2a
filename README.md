@@ -11,7 +11,6 @@
 > - **Automated Exception Resolution**: Uses probabilistic simulation instead of real API integrations (address validation, payment retries)
 > - **Billing Calculations**: Simplified 3PL billing logic without complex rate cards and contract-specific pricing
 > - **SLA Detection**: Basic time-based rules without business calendar, warehouse capacity, or order complexity modeling
-> - **AI Cost Tracking**: Estimated costs rather than real provider pricing integration
 > - **Order Analysis**: Detects only obvious test data patterns rather than comprehensive validation
 > 
 > See [`DEMO.md`](docs/DEMO.md) for detailed technical analysis. The architecture, patterns, and infrastructure components are production-ready, but business logic would need full implementation for production use.

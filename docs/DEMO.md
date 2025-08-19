@@ -27,26 +27,7 @@ if success:
 
 ---
 
-### 2. **AI Cost Tracking**
-**File:** `app/services/ai_client.py:_make_request()`
-
-```python
-# Estimate cost (rough approximation)
-estimated_cost_cents = max(1, total_tokens // 100)
-ai_cost_cents_total.labels(provider=self.provider, model=self.model).inc(estimated_cost_cents)
-```
-
-**Current Implementation:** Provides estimated cost tracking using simplified token-to-cost conversion for demonstration of cost monitoring capabilities.
-
-**Production Requirements:**
-- Actual provider pricing APIs (OpenAI, Anthropic, etc.)
-- Real-time rate fetching
-- Usage-based billing calculations
-- Cost optimization algorithms
-
----
-
-### 3. **Billing Operations Calculation**
+### 2. **Billing Operations Calculation**
 **File:** `app/services/billing.py:_calculate_operations_from_events()`
 
 ```python
@@ -68,7 +49,7 @@ if events:
 
 ---
 
-### 4. **SLA Breach Detection Logic**
+### 3. **SLA Breach Detection Logic**
 **File:** `app/services/sla_engine.py:_detect_breaches()`
 
 ```python
@@ -92,7 +73,7 @@ def _check_pick_sla(self, timeline, sla_config):
 
 ---
 
-### 5. **Invoice Validation**
+### 4. **Invoice Validation**
 **File:** `app/services/billing.py:validate_invoice()`
 
 ```python
@@ -115,7 +96,7 @@ if invoice.amount_cents != expected_amount:
 
 ---
 
-### 6. **Order Problem Detection**
+### 5. **Order Problem Detection**
 **File:** `app/services/order_analyzer.py:analyze_order()`
 
 ```python
@@ -140,7 +121,7 @@ def _check_address_issues(self, order):
 
 ## 🤔 **Additional Demo Simplifications**
 
-### 7. **AI Fallback Responses**
+### 6. **AI Fallback Responses**
 **File:** `app/services/ai_client.py:_make_request()`
 
 ```python
@@ -156,7 +137,7 @@ except httpx.TimeoutException:
 
 ---
 
-### 8. **Cache Key Generation**
+### 7. **Cache Key Generation**
 **File:** `app/services/ai_exception_analyst.py:_get_cache_key()`
 
 ```python

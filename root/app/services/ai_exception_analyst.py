@@ -235,35 +235,52 @@ def _get_cache_key(exception: ExceptionRecord) -> str:
 
 def _prepare_ai_context(exception: ExceptionRecord) -> Dict[str, Any]:
     """
-    Prepare context for AI analysis.
+    Prepare context for AI root cause analysis.
     
-    Builds comprehensive context dictionary for AI analysis
-    with PII redaction and structured data extraction.
+    Builds comprehensive context dictionary for AI analysis with rich data
+    for root cause analysis instead of simple label copying.
     
     Args:
         exception (ExceptionRecord): Exception record for context building
         
     Returns:
-        Dict[str, Any]: Context dictionary ready for AI analysis
+        Dict[str, Any]: Context dictionary ready for AI root cause analysis
     """
     context = {
-        "reason_code": exception.reason_code,
+        # Basic exception info
+        "exception_type": exception.reason_code,  # What happened (fact)
         "order_id_suffix": exception.order_id[-4:] if len(exception.order_id) >= 4 else exception.order_id,
         "tenant": exception.tenant,
         "severity": exception.severity,
-        "status": exception.status
+        "status": exception.status,
+        "created_at": exception.created_at.isoformat() if exception.created_at else None
     }
     
-    # Add context data if available
+    # Add timing and SLA data if available
     if exception.context_data:
-        # Safely extract timing information
         context.update({
-            "duration_minutes": exception.context_data.get("actual_minutes", 0),
-            "sla_minutes": exception.context_data.get("sla_minutes", 0),
-            "delay_minutes": exception.context_data.get("delay_minutes", 0)
+            "actual_duration_minutes": exception.context_data.get("actual_minutes", 0),
+            "sla_threshold_minutes": exception.context_data.get("sla_minutes", 0),
+            "delay_minutes": exception.context_data.get("delay_minutes", 0),
+            "delay_percentage": (exception.context_data.get("delay_minutes", 0) / exception.context_data.get("sla_minutes", 1) * 100) if exception.context_data.get("sla_minutes", 0) > 0 else 0
+        })
+        
+        # Add any additional context data
+        for key, value in exception.context_data.items():
+            if key not in ["actual_minutes", "sla_minutes", "delay_minutes", "reason_code", "severity"]:
+                context[f"context_{key}"] = value
+    
+    # Add time-based analysis context
+    if exception.created_at:
+        context.update({
+            "hour_of_day": exception.created_at.hour,
+            "day_of_week": exception.created_at.strftime('%A'),
+            "is_weekend": exception.created_at.weekday() >= 5,
+            "is_peak_hours": 14 <= exception.created_at.hour <= 17,  # 2-5 PM
+            "is_morning_rush": 8 <= exception.created_at.hour <= 11   # 8-11 AM
         })
     
-    # Redact PII
+    # Redact PII but keep business-relevant data
     return redact_context(context)
 
 
@@ -298,10 +315,10 @@ async def _apply_ai_analysis(
     ai_result: Dict[str, Any]
 ) -> None:
     """
-    Apply AI analysis to exception record.
+    Apply AI root cause analysis to exception record.
     
-    Updates exception record with AI-generated analysis
-    including labels, confidence scores, and narrative notes.
+    Updates exception record with AI-generated root cause analysis,
+    recommendations, and enhanced operational insights.
     
     Args:
         db (AsyncSession): Database session for persistence
@@ -318,8 +335,35 @@ async def _apply_ai_analysis(
     # Set confidence score
     exception.ai_confidence = ai_result.get("confidence", 0.0)
     
-    # Set notes
-    exception.ops_note = ai_result.get("ops_note", "")[:2000]  # Truncate if too long
+    # Build enhanced ops note with root cause analysis
+    ops_note_parts = []
+    
+    # Add root cause analysis if available
+    root_cause = ai_result.get("root_cause_analysis", "")
+    if root_cause:
+        ops_note_parts.append(f"[ROOT CAUSE] {root_cause}")
+    
+    # Add original ops note
+    ops_note = ai_result.get("ops_note", "")
+    if ops_note:
+        ops_note_parts.append(f"[ANALYSIS] {ops_note}")
+    
+    # Add recommendations if available
+    recommendations = ai_result.get("recommendations", "")
+    if recommendations:
+        ops_note_parts.append(f"[RECOMMENDATIONS] {recommendations}")
+    
+    # Add priority factors if available
+    priority_factors = ai_result.get("priority_factors", [])
+    if priority_factors:
+        factors_str = ", ".join(priority_factors)
+        ops_note_parts.append(f"[PRIORITY FACTORS] {factors_str}")
+    
+    # Combine all parts
+    combined_ops_note = "\n\n".join(ops_note_parts)
+    exception.ops_note = combined_ops_note[:2000]  # Truncate if too long
+    
+    # Set client note
     exception.client_note = ai_result.get("client_note", "")[:1000]
     
     # Update timestamp
