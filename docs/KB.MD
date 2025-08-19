@@ -6,7 +6,7 @@
 
 Welcome to the E²A Knowledge Base - your comprehensive guide to troubleshooting, performance tuning, and operational excellence. This document covers everything from common issues to advanced scripting and monitoring.
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 root/
@@ -47,7 +47,7 @@ root/
 └── pyproject.toml           # Project dependencies (Poetry)
 ```
 
-## 🚨 Common Issues & Quick Fixes
+## Common Issues & Quick Fixes
 
 ### Database Connection Issues
 **Symptoms**: Connection timeouts, migration failures, API errors
@@ -108,7 +108,7 @@ curl http://localhost:8000/api/health
 - Verify Redis Cloud instance status
 - Check SSL certificate configuration
 
-## ⚡ Performance Tuning
+## Performance Tuning
 
 ### Database Optimization
 ```bash
@@ -163,7 +163,7 @@ HEALTH_CACHE_TTL=30
 CIRCUIT_BREAKER_MONITORING=true
 ```
 
-## 📊 Observability & Monitoring
+## Observability & Monitoring
 
 ### Prometheus Metrics
 
@@ -221,7 +221,7 @@ OTEL_TRACES_SAMPLER_ARG: 0.1
 - DLQ depth >100 items for >1 hour
 ```
 
-## 🔒 Security & Compliance
+## Security & Compliance
 
 ### Authentication & Authorization
 
@@ -255,13 +255,13 @@ JWT_ACCESS_TOKEN_EXPIRE_MINUTES=30
 - [ ] Database encryption at rest
 - [ ] Network segmentation
 
-## 🛠️ Operational Scripts
+## Operational Scripts
 
 E²A includes operational scripts for maintenance, testing, and data management.
 
 ### Core Operational Scripts
 
-#### 🔄 **replay_dlq.py** - DLQ Recovery
+#### **replay_dlq.py** - DLQ Recovery
 Reprocesses failed events from the Dead Letter Queue after bug fixes or system updates.
 
 **Features**:
@@ -281,7 +281,7 @@ python replay_dlq.py --batch-size 10 --max-batches 5
 - `--batch-size`: Items per batch (default: 10)
 - `--max-batches`: Maximum batches to process (default: all)
 
-#### 📄 **generate_invoices.py** - Invoice Management
+#### **generate_invoices.py** - Invoice Management
 Generates missing invoices for completed orders with comprehensive validation.
 
 **Features**:
@@ -307,7 +307,7 @@ python generate_invoices.py --backfill --tenant demo-3pl --days-back 30
 
 ### Utility Scripts
 
-#### 🚀 **deploy_flows.py** - Prefect Flow Management
+#### **deploy_flows.py** - Prefect Flow Management
 Manages deployment of Prefect business process workflows to the Prefect server.
 
 **Features**:
@@ -324,7 +324,7 @@ python deploy_flows.py
 
 ### Operational Management Script
 
-#### 🎯 **run.sh** - System Operations
+#### **run.sh** - System Operations
 Comprehensive operational script for common system management tasks.
 
 **Features**:
@@ -396,11 +396,11 @@ All scripts include comprehensive logging and can be integrated with:
 - **Dead Letter Queue**: Captures failed operations
 - **Health Checks**: Monitors script health and dependencies
 
-## 🎭 Shopify Mock API Demo System
+## Shopify Mock API Demo System
 
 ### Demo System Overview
 
-#### 🎭 **demo/** - Realistic E-commerce Testing Suite
+#### **demo/** - Realistic E-commerce Testing Suite
 Advanced Shopify Mock API system for comprehensive testing and demonstration with realistic data generation.
 
 **Main Components**:
@@ -442,7 +442,7 @@ SHOPIFY_DEMO_API_PRODUCE_MAX_ORDERS: 1999
 
 ### Demo System
 
-#### 🎭 **demo/** - Shopify Mock API
+#### **demo/** - Shopify Mock API
 Realistic e-commerce testing suite with comprehensive data generation.
 
 **Components**:
@@ -461,7 +461,7 @@ docker-compose --profile demo up -d
 open http://localhost:8090/docs
 ```
 
-## 📈 Monitoring & Maintenance
+## Monitoring & Maintenance
 
 ### Health Checks
 
@@ -515,7 +515,7 @@ cp .env .env.backup.$(date +%Y%m%d)
 cp -r app/business/policies/ policies.backup.$(date +%Y%m%d)
 ```
 
-## 🔄 Automation & Scheduling
+## Automation & Scheduling
 
 ### Prefect Business Process Flows
 
@@ -570,7 +570,7 @@ jobs:
           make health-check
 ```
 
-## 🚀 Troubleshooting Workflows
+## Troubleshooting Workflows
 
 ### Issue Resolution Process
 
