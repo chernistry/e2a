@@ -1,40 +1,34 @@
-"""Resilience module for handling external service failures."""
+"""
+Resilience patterns for high-availability systems.
 
-from .circuit_breaker import CircuitBreaker, CircuitBreakerError
-from .retry_policies import (
-    RetryPolicy,
-    ExponentialBackoffPolicy,
-    FixedDelayPolicy,
-    create_ai_retry_policy,
-    create_database_retry_policy,
-    create_redis_retry_policy,
-    create_http_retry_policy
+This module provides implementations of common resilience patterns:
+- Circuit Breaker: Prevents cascading failures
+- Rate Limiter: Controls request rate to prevent overload
+- Retry: Automatic retry with exponential backoff
+- Timeout: Request timeout handling
+"""
+
+from .circuit_breaker import (
+    CircuitBreaker, 
+    CircuitBreakerError, 
+    CircuitState, 
+    CircuitBreakerConfig, 
+    get_circuit_breaker,
+    get_all_circuit_breakers,
+    reset_circuit_breaker,
+    get_circuit_breaker_stats
 )
-from .decorators import (
-    with_circuit_breaker,
-    with_retry,
-    with_resilience,
-    resilient_async,
-    resilient_sync
-)
-from .health_check import HealthChecker, ServiceHealth, HealthStatus
+from .rate_limiter import RateLimiter, TokenBucketRateLimiter
 
 __all__ = [
     "CircuitBreaker",
     "CircuitBreakerError", 
-    "RetryPolicy",
-    "ExponentialBackoffPolicy",
-    "FixedDelayPolicy",
-    "create_ai_retry_policy",
-    "create_database_retry_policy", 
-    "create_redis_retry_policy",
-    "create_http_retry_policy",
-    "with_circuit_breaker",
-    "with_retry",
-    "with_resilience",
-    "resilient_async",
-    "resilient_sync",
-    "HealthChecker",
-    "ServiceHealth",
-    "HealthStatus"
+    "CircuitState",
+    "CircuitBreakerConfig",
+    "get_circuit_breaker",
+    "get_all_circuit_breakers",
+    "reset_circuit_breaker", 
+    "get_circuit_breaker_stats",
+    "RateLimiter",
+    "TokenBucketRateLimiter"
 ]

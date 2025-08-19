@@ -141,11 +141,10 @@ class ResilienceManager:
             circuit_breakers = get_all_circuit_breakers()
             circuit_breaker_states = {
                 name: {
-                    "state": cb.stats.state.value,
-                    "failure_count": cb.stats.failure_count,
-                    "success_count": cb.stats.success_count,
-                    "total_requests": cb.stats.total_requests,
-                    "is_healthy": cb.is_closed()
+                    "state": cb.state.value,
+                    "failure_count": cb.failure_count,
+                    "success_count": cb.success_count,
+                    "is_healthy": cb.is_closed
                 }
                 for name, cb in circuit_breakers.items()
             }
@@ -153,7 +152,7 @@ class ResilienceManager:
             # Calculate overall health
             healthy_services = sum(1 for health in service_health.values() if health.is_healthy())
             total_services = len(service_health)
-            healthy_circuit_breakers = sum(1 for cb in circuit_breakers.values() if cb.is_closed())
+            healthy_circuit_breakers = sum(1 for cb in circuit_breakers.values() if cb.is_closed)
             total_circuit_breakers = len(circuit_breakers)
             
             overall_healthy = (

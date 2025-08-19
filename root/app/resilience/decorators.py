@@ -214,8 +214,7 @@ def ai_resilient(operation_name: Optional[str] = None):
         config = CircuitBreakerConfig(
             failure_threshold=3,
             recovery_timeout=30.0,
-            success_threshold=2,
-            timeout=30.0
+            success_threshold=2
         )
         
         return with_resilience("ai_service", policy, config, operation_name)(func)
@@ -233,8 +232,7 @@ def database_resilient(operation_name: Optional[str] = None):
         config = CircuitBreakerConfig(
             failure_threshold=5,
             recovery_timeout=10.0,
-            success_threshold=3,
-            timeout=10.0
+            success_threshold=3
         )
         
         return with_resilience("database", policy, config, operation_name)(func)
@@ -252,8 +250,7 @@ def redis_resilient(operation_name: Optional[str] = None):
         config = CircuitBreakerConfig(
             failure_threshold=3,
             recovery_timeout=5.0,
-            success_threshold=2,
-            timeout=5.0
+            success_threshold=2
         )
         
         return with_resilience("redis", policy, config, operation_name)(func)
@@ -271,8 +268,7 @@ def http_resilient(operation_name: Optional[str] = None):
         config = CircuitBreakerConfig(
             failure_threshold=5,
             recovery_timeout=60.0,
-            success_threshold=3,
-            timeout=30.0
+            success_threshold=3
         )
         
         return with_resilience("http_client", policy, config, operation_name)(func)
