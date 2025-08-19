@@ -130,8 +130,14 @@ flowchart TD
         INGEST[Event Ingestion<br/>POST /ingest/*]
         SLA[SLA Engine<br/>Real-time Monitoring]
         AI[AI Analyst<br/>Exception Analysis]
-        INVOICE[Invoice Generator<br/>Billing Automation]
-        VALIDATE[Invoice Validator<br/>Nightly Reconciliation]
+        PREFECT[Prefect Flows<br/>Business Processes]
+    end
+    
+    subgraph "Business Process Flows"
+        ORDER[Order Processing<br/>Pipeline]
+        EXCEPTION[Exception Management<br/>Pipeline]
+        BILLING[Billing Management<br/>Pipeline]
+        ORCHESTRATOR[Business Operations<br/>Orchestrator]
     end
     
     subgraph "Outputs"
@@ -149,14 +155,20 @@ flowchart TD
     SLA --> AI
     SLA --> EXCEPTIONS
     
-    INGEST --> INVOICE
-    INVOICE --> INVOICES
-    INVOICE --> VALIDATE
-    VALIDATE --> INVOICES
+    INGEST --> PREFECT
+    PREFECT --> ORDER
+    PREFECT --> EXCEPTION
+    PREFECT --> BILLING
+    PREFECT --> ORCHESTRATOR
+    
+    ORDER --> INVOICES
+    EXCEPTION --> EXCEPTIONS
+    BILLING --> INVOICES
+    ORCHESTRATOR --> REPORTS
     
     AI --> EXCEPTIONS
     SLA --> ALERTS
-    VALIDATE --> ALERTS
+    BILLING --> ALERTS
     
     EXCEPTIONS --> REPORTS
     INVOICES --> REPORTS
@@ -164,6 +176,10 @@ flowchart TD
     style WMS fill:#e1f5fe
     style SHOPIFY fill:#e1f5fe
     style CARRIER fill:#e1f5fe
+    style ORDER fill:#e8f5e8
+    style EXCEPTION fill:#fff3e0
+    style BILLING fill:#f3e5f5
+    style ORCHESTRATOR fill:#e3f2fd
     style EXCEPTIONS fill:#e8f5e8
     style INVOICES fill:#e8f5e8
     style ALERTS fill:#fff3e0
@@ -184,8 +200,15 @@ graph TD
     subgraph "Processing Layer"
         SLA_ENGINE[SLA Engine]
         AI_ANALYST[AI Analyst Service]
-        PREFECT[Prefect Flows]
+        PREFECT[Prefect Server]
         RAG[RAG Service]
+    end
+    
+    subgraph "Business Process Flows"
+        ORDER_FLOW[Order Processing<br/>Pipeline]
+        EXCEPTION_FLOW[Exception Management<br/>Pipeline]
+        BILLING_FLOW[Billing Management<br/>Pipeline]
+        ORCHESTRATOR_FLOW[Business Operations<br/>Orchestrator]
     end
     
     subgraph "Storage Layer"
@@ -197,6 +220,7 @@ graph TD
     subgraph "External Integrations"
         SLACK_API[Slack API]
         MEULEX[Meulex RAG System]
+        SHOPIFY_MOCK[Shopify Mock API]
     end
     
     subgraph "Observability"
@@ -211,14 +235,23 @@ graph TD
     RAG --> AI_ANALYST
     RAG -.-> MEULEX
     
+    PREFECT --> ORDER_FLOW
+    PREFECT --> EXCEPTION_FLOW
+    PREFECT --> BILLING_FLOW
+    PREFECT --> ORCHESTRATOR_FLOW
+    
     SLA_ENGINE --> SUPABASE
     AI_ANALYST --> SUPABASE
-    PREFECT --> SUPABASE
+    ORDER_FLOW --> SUPABASE
+    EXCEPTION_FLOW --> SUPABASE
+    BILLING_FLOW --> SUPABASE
+    ORCHESTRATOR_FLOW --> SUPABASE
     RAG --> SUPABASE
     
     API --> REDIS
     API --> DLQ
     SLACK <--> SLACK_API
+    SHOPIFY_MOCK --> API
     
     API -- Exposes --> PROMETHEUS
     API -- Serves --> DASHBOARD
@@ -235,7 +268,7 @@ sequenceDiagram
     participant SLA as SLA Engine
     participant DB as Database<br/>(Postgres)
     participant AI as AI Analyst
-    participant Prefect as Prefect<br/>(Nightly Flow)
+    participant Prefect as Prefect<br/>Business Flows
     participant Dashboard as Dashboard<br/>(Real-time)
 
     Note over Source,Dashboard: Real-time Event Processing
@@ -246,18 +279,17 @@ sequenceDiagram
     AI-->>DB: Store AI-generated narrative
     API-->>Dashboard: Real-time metrics update
     
-    Note over Prefect,Dashboard: Nightly Invoice Processing
-    Prefect->>DB: Fetch completed orders (events)
-    Prefect->>Prefect: Generate invoices from operations
-    Prefect->>DB: Store generated invoices
-    Prefect->>DB: Validate existing invoices
-    Prefect->>DB: Create adjustments for discrepancies
-    Prefect-->>Dashboard: Update billing metrics
+    Note over Prefect,Dashboard: Business Process Automation
+    Prefect->>DB: Order Processing Pipeline<br/>Monitor fulfillment progress
+    Prefect->>DB: Exception Management Pipeline<br/>Analyze patterns, auto-resolve
+    Prefect->>DB: Billing Management Pipeline<br/>Generate invoices, validate accuracy
+    Prefect->>DB: Business Orchestrator<br/>Coordinate all processes
+    Prefect-->>Dashboard: Update business metrics
 ```
 
 [See bigger](https://www.mermaidchart.com/play#pako:eNqrVkrOT0lVslJSqgUAFW4DVg)
 
-### Invoice Processing Pipeline
+### Business Process Pipeline
 
 ```mermaid
 flowchart LR
@@ -266,49 +298,69 @@ flowchart LR
         E2[pick_completed]
         E3[pack_completed]
         E4[ship_label_printed]
+        E5[order_fulfilled]
+        E6[order_delivered]
     end
     
-    subgraph "Invoice Generation"
-        DETECT[Detect Completed Orders]
-        CALC[Calculate Billable Operations]
-        GEN[Generate Invoice]
+    subgraph "Order Processing Flow"
+        MONITOR[Monitor Order<br/>Fulfillment]
+        COMPLETE[Process Completed<br/>Orders]
+        SLA_CHECK[Monitor SLA<br/>Compliance]
     end
     
-    subgraph "Invoice Validation"
-        FETCH[Fetch Draft Invoices]
-        VALIDATE[Validate Against Events]
-        ADJUST[Create Adjustments]
+    subgraph "Exception Management Flow"
+        ANALYZE[Analyze Exception<br/>Patterns]
+        PRIORITIZE[Prioritize Active<br/>Exceptions]
+        AUTO_RESOLVE[Attempt Automated<br/>Resolution]
+    end
+    
+    subgraph "Billing Management Flow"
+        IDENTIFY[Identify Billable<br/>Orders]
+        GENERATE[Generate<br/>Invoices]
+        VALIDATE[Validate Invoice<br/>Accuracy]
+        ADJUST[Process Billing<br/>Adjustments]
     end
     
     subgraph "Outputs"
-        INV[Invoice Records]
-        ADJ[Adjustment Records]
-        METRICS[Billing Metrics]
+        INVOICES[Invoice Records]
+        ADJUSTMENTS[Adjustment Records]
+        RESOLVED[Resolved Exceptions]
+        METRICS[Business Metrics]
     end
     
-    E1 --> DETECT
-    E2 --> DETECT
-    E3 --> DETECT
-    E4 --> DETECT
+    E1 --> MONITOR
+    E2 --> MONITOR
+    E3 --> MONITOR
+    E4 --> MONITOR
+    E5 --> COMPLETE
+    E6 --> COMPLETE
     
-    DETECT --> CALC
-    CALC --> GEN
-    GEN --> INV
+    MONITOR --> SLA_CHECK
+    COMPLETE --> IDENTIFY
     
-    INV --> FETCH
-    FETCH --> VALIDATE
+    SLA_CHECK --> ANALYZE
+    ANALYZE --> PRIORITIZE
+    PRIORITIZE --> AUTO_RESOLVE
+    AUTO_RESOLVE --> RESOLVED
+    
+    IDENTIFY --> GENERATE
+    GENERATE --> VALIDATE
     VALIDATE --> ADJUST
-    ADJUST --> ADJ
     
-    INV --> METRICS
-    ADJ --> METRICS
+    GENERATE --> INVOICES
+    ADJUST --> ADJUSTMENTS
+    COMPLETE --> METRICS
+    RESOLVED --> METRICS
     
     style E1 fill:#e3f2fd
     style E2 fill:#e3f2fd
     style E3 fill:#e3f2fd
     style E4 fill:#e3f2fd
-    style INV fill:#e8f5e8
-    style ADJ fill:#fff3e0
+    style E5 fill:#e3f2fd
+    style E6 fill:#e3f2fd
+    style INVOICES fill:#e8f5e8
+    style ADJUSTMENTS fill:#fff3e0
+    style RESOLVED fill:#e8f5e8
     style METRICS fill:#f3e5f5
 ```
 
@@ -351,45 +403,18 @@ flowchart LR
 
 ![Prefect Workflow Dashboard](assets/scr_prefect.png)
 
-*Prefect UI showing a completed "invoice-validate-nightly" workflow with task flow, logs, and execution details.*
+*Prefect UI showing completed business process workflows with task flow, logs, and execution details.*
 
+**Why Prefect?**: Python-first, advanced error handling with retries/circuit breakers, observability, easy local dev w/ Community Server, native async.
 
-**Why Prefect?**: Python-first, advanced error handling with retries/circuit breakers, observability, easy local dev w/ Community Server, native async. 
-
-
-### Key Workflows
-
-- **Invoice Validation Nightly** (`flows/invoice_validate_nightly.py`): Daily validation with tariff checks and AI rationale
-- **Event Streaming Simulation** (`flows/event_streaming.py`): Configurable WMS/Shopify event simulation with realistic data generation for testing
-- **Manual Triggers**: On-demand workflow execution via admin endpoints and Prefect UI
-
-
-
+E²A uses webhook-driven business process flows managed by the Business Operations Orchestrator, coordinating order processing, exception management, and billing with unified reporting and automation. Order processing tracks fulfillment and SLAs, exception management automates common fixes and insights, and billing automates invoice generation and validation. Prefect deployments (see `prefect.yaml`) run these flows on schedules or on-demand, triggered via UI, API, or CLI.
 
 
 ## Python Scripts
 
-E²A includes a comprehensive set of Python scripts for operational tasks, testing, and maintenance. These scripts provide command-line interfaces for common operations and can be run manually or scheduled.
+E²A includes operational scripts for maintenance, testing, and data management. These scripts provide command-line interfaces for common operations and can be run manually or scheduled.
 
 ### Core Scripts
-
-#### 🔧 **validate_fixes.py** - Fix Validation Script
-Validates that all async fixes are working properly by running comprehensive tests on the event processing pipeline.
-
-**Features:**
-- Basic event processing validation
-- SLA evaluation with exception creation
-- Exception relationship access testing
-- DLQ error handling verification
-- Current DLQ status checking
-
-**Usage:**
-```bash
-cd root/scripts
-python validate_fixes.py
-```
-
-**Output:** Comprehensive test report with pass/fail status for each validation step.
 
 #### 🔄 **replay_dlq.py** - DLQ Replay Script
 Reprocesses failed events from the Dead Letter Queue after bug fixes or system updates.
@@ -435,6 +460,23 @@ python generate_invoices.py --backfill --tenant demo-3pl --days-back 30
 - `--days-back`: Days back for backfill operations (default: 30)
 - `--dry-run`: Preview operations without creating invoices
 
+### Utility Scripts
+
+#### 🚀 **deploy_flows.py** - Prefect Flow Deployment
+Manages deployment of Prefect workflows to the Prefect server.
+
+**Features:**
+- Automatic flow deployment
+- Environment-specific configurations
+- Health checks and validation
+- Rollback capabilities
+
+**Usage:**
+```bash
+cd root/scripts/utility
+python deploy_flows.py
+```
+
 ### Shopify Mock API Demo System
 
 #### 🎭 **demo/** - Realistic E-commerce Testing Suite
@@ -477,29 +519,12 @@ SHOPIFY_DEMO_API_PRODUCE_MIN_ORDERS: 1001  # Batch size range
 SHOPIFY_DEMO_API_PRODUCE_MAX_ORDERS: 1999
 ```
 
-### Utility Scripts
-
-#### 🚀 **deploy_flows.py** - Prefect Flow Deployment
-Manages deployment of Prefect workflows to the Prefect server.
-
-**Features:**
-- Automatic flow deployment
-- Environment-specific configurations
-- Health checks and validation
-- Rollback capabilities
-
-**Usage:**
-```bash
-cd root/scripts/utility
-python deploy_flows.py
-```
-
 ### Script Management
 
 #### **Requirements & Dependencies**
 ```bash
 # Install script dependencies
-pip install -r root/scripts/requirements-event-s.txt
+pip install -r root/requirements.txt
 
 # Or use the demo system container
 docker-compose --profile demo up -d
@@ -516,11 +541,14 @@ export AI_MODEL="google/gemini-2.0-flash-exp:free"
 
 #### **Scheduling & Automation**
 ```bash
-# Cron job for nightly invoice generation
-0 2 * * * cd /path/to/octup/root/scripts && python generate_invoices.py
+# Prefect deployment for business processes
+prefect deployment run 'billing-management-pipeline/billing-management'
+prefect deployment run 'exception-management-pipeline/exception-management'
 
-# Cron job for DLQ replay (every 4 hours)
-0 */4 * * * cd /path/to/octup/root/scripts && python replay_dlq.py --batch-size 20
+# Manual script execution
+cd root/scripts
+python generate_invoices.py --tenant demo-3pl
+python replay_dlq.py --batch-size 20
 ```
 
 #### **Monitoring & Logging**
@@ -535,38 +563,6 @@ All scripts include comprehensive logging and can be integrated with:
 - **Retry Logic**: Exponential backoff with jitter
 - **Dead Letter Queue**: Captures failed operations
 - **Health Checks**: Monitors script health and dependencies
-
-### Testing & Validation
-
-#### **Script Testing**
-```bash
-# Run all validation tests
-python validate_fixes.py
-
-# Test specific scenarios
-python validate_fixes.py --test sla_evaluation
-python validate_fixes.py --test dlq_handling
-```
-
-#### **Integration Testing**
-```bash
-# Test demo system with real API
-cd demo
-python test_demo.py
-
-# Test invoice generation
-python generate_invoices.py --dry-run
-```
-
-#### **Performance Testing**
-```bash
-# Test demo system
-docker-compose --profile demo up -d
-python test_demo.py
-
-# Generate large batches
-curl -X POST http://localhost:8090/demo/generate-batch
-```
 
 
 ## License
@@ -587,4 +583,4 @@ This project uses several open-source packages:
 
 ---
 
-**Last Updated**: 2025-01-27  
+**Last Updated**: 2025-08-19  

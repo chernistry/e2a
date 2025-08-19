@@ -11,7 +11,7 @@ push: null
 # Pull configuration
 pull:
   - prefect.deployments.steps.set_working_directory:
-      directory: /Users/sasha/IdeaProjects/octup/root
+      directory: /path/to/octup/root  # Local path for direct execution
 
 # Deployments
 deployments:
