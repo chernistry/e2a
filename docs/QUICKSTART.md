@@ -12,6 +12,20 @@
 - Supabase CLI (for local development)
 - OpenRouter API Key (for AI features)
 
+## Technology Stack
+
+**FastAPI** (async, OpenAPI docs), **Supabase/PostgreSQL** (managed, auth, real-time), **Redis** (persistence, atomic ops), **Prefect** (Python-first, cloud-native), **OpenRouter** (cost-effective, multi-model), **Next.js + Prometheus** (real-time dashboard, metrics).
+
+### Design Patterns & Principles
+
+**🔧 Key Architectural Decisions:**
+
+1. **Idempotency Strategy**: Redis-backed duplicate protection with 5-second locks and UPSERT fallback
+2. **AI Fallback Strategy**: Hybrid AI + rule-based system with 0.55 confidence threshold and $20/day budget  
+3. **Event Sourcing**: Event-driven SLA evaluation with configurable policies and real-time breach detection
+
+**Benefits**: Fast duplicate detection, AI-assisted analysis, real-time SLA monitoring.
+
 ## Quick Start
 
 ### Option 1: Local Development (Recommended)
@@ -199,6 +213,33 @@ SLACK_SIGNING_SECRET=your-signing-secret-here
 SLACK_DEFAULT_CHANNEL=#oktup-alerts
 SLACK_NOTIFICATION_ENABLED=true
 ```
+
+### AI Configuration
+
+```yaml
+# Production settings via OpenRouter
+AI_PROVIDER_BASE_URL: https://openrouter.ai/api/v1
+AI_MODEL: google/gemini-2.0-flash-exp:free
+AI_MAX_DAILY_TOKENS: 200000
+AI_MIN_CONFIDENCE: 0.55
+AI_TIMEOUT_SECONDS: 3
+AI_RETRY_MAX_ATTEMPTS: 2
+AI_SAMPLING_SEVERITY: important_only
+```
+
+### AI Resilience Features
+- **Circuit Breaker Protection**: Prevents cascade failures during AI service outages
+- **Fallback Mechanisms**: Rule-based analysis when AI is unavailable (confidence < 0.55)
+- **Token Budget Management**: Daily limits (200K tokens) to control costs
+- **Confidence Thresholds**: Quality gates for AI-generated content
+- **Comprehensive Monitoring**: Prometheus metrics for AI requests, tokens, costs, failures
+
+### AI Implementation Details
+**Prompts**: External Jinja2 templates in `/prompts/` directory for maintainability
+**JSON Extraction**: Robust parsing with fallback mechanisms for malformed AI responses  
+**Error Handling**: Graceful degradation with rule-based fallbacks
+**Cost Control**: Daily token budgets and request sampling based on severity 
+**RAG Integration**: Foundation compatible with vector databases (Qdrant, Pinecone) and RAG frameworks like [Meulex](https://github.com/chernistry/meulex/) for enhanced Slack bot capabilities
 
 ### Switching Between Environments
 

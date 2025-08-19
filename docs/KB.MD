@@ -351,6 +351,95 @@ Comprehensive operational script for common system management tasks.
 ./run.sh reset          # Full database reset (WARNING: deletes ALL data)
 ```
 
+### Script Management
+
+#### **Requirements & Dependencies**
+```bash
+# Install script dependencies
+pip install -r root/requirements.txt
+
+# Or use the demo system container
+docker-compose --profile demo up -d
+```
+
+#### **Environment Setup**
+```bash
+# Set required environment variables
+export DATABASE_URL="postgresql+asyncpg://user:pass@localhost/octup"
+export REDIS_URL="redis://localhost:6379"
+export AI_PROVIDER_BASE_URL="https://openrouter.ai/api/v1"
+export AI_MODEL="google/gemini-2.0-flash-exp:free"
+```
+
+#### **Scheduling & Automation**
+```bash
+# Prefect deployment for business processes
+prefect deployment run 'billing-management-pipeline/billing-management'
+prefect deployment run 'exception-management-pipeline/exception-management'
+
+# Manual script execution
+cd root/scripts
+python generate_invoices.py --tenant demo-3pl
+python replay_dlq.py --batch-size 20
+```
+
+#### **Monitoring & Logging**
+All scripts include comprehensive logging and can be integrated with:
+- **Prometheus**: Metrics collection and alerting
+- **Grafana**: Dashboard visualization
+- **ELK Stack**: Log aggregation and analysis
+- **Slack**: Real-time notifications
+
+#### **Error Handling & Resilience**
+- **Circuit Breakers**: Prevents cascade failures
+- **Retry Logic**: Exponential backoff with jitter
+- **Dead Letter Queue**: Captures failed operations
+- **Health Checks**: Monitors script health and dependencies
+
+## 🎭 Shopify Mock API Demo System
+
+### Demo System Overview
+
+#### 🎭 **demo/** - Realistic E-commerce Testing Suite
+Advanced Shopify Mock API system for comprehensive testing and demonstration with realistic data generation.
+
+**Main Components**:
+- **`shopify-mock/`**: Complete Shopify API simulation
+- **`main.py`**: FastAPI server with realistic endpoints
+- **`generator.py`**: Faker-based realistic data generation
+- **`test_demo.py`**: Integration testing script
+- **Docker setup**: Containerized deployment
+
+**Advanced Features**:
+- **Realistic Data**: Faker-generated customers, products, orders
+- **Automatic Webhooks**: Real-time integration with Octup E²A
+- **Exception Simulation**: 13% natural exception rate with realistic scenarios
+- **Multi-tenant Support**: Tenant isolation and correlation tracking
+- **Health Monitoring**: Comprehensive health checks and metrics
+
+**Usage**:
+```bash
+# Start demo system
+cd docker
+docker-compose --profile demo up -d
+
+# Test integration
+cd ../demo
+python test_demo.py
+
+# Access interfaces
+open http://localhost:8090/docs    # Shopify Mock API
+open http://localhost:3000         # Octup Dashboard
+```
+
+**Configuration**:
+```yaml
+OCTUP_API_URL: http://localhost:8000     # Target API
+WEBHOOK_DELAY_SECONDS: 2                 # Webhook timing
+SHOPIFY_DEMO_API_PRODUCE_MIN_ORDERS: 1001  # Batch size range
+SHOPIFY_DEMO_API_PRODUCE_MAX_ORDERS: 1999
+```
+
 ### Demo System
 
 #### 🎭 **demo/** - Shopify Mock API
