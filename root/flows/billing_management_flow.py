@@ -227,7 +227,7 @@ async def generate_invoices(
                     invoice_number=invoice_number,
                     amount_cents=order_data['estimated_amount_cents'],
                     currency=billing_config.get('currency', 'USD'),
-                    operations_summary=order_data['operations'],
+                    billable_ops=order_data['operations'],
                     status='DRAFT',
                     invoice_date=datetime.utcnow(),
                     due_date=datetime.utcnow() + timedelta(days=30),  # 30-day payment terms

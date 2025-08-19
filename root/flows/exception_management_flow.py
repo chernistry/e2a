@@ -345,8 +345,18 @@ async def attempt_automated_resolution(
     
     async with get_session() as db:
         for exc_data in all_exceptions:
-            exc = exc_data['exception']
-            reason_code = exc.reason_code
+            exc_id = exc_data['exception'].id
+            reason_code = exc_data['exception'].reason_code
+            order_id = exc_data['exception'].order_id
+            
+            # Reload the exception in this session to avoid detached object issues
+            exc_query = select(ExceptionRecord).where(ExceptionRecord.id == exc_id)
+            result = await db.execute(exc_query)
+            exc = result.scalar_one_or_none()
+            
+            if not exc:
+                logger.warning(f"Exception {exc_id} not found, skipping")
+                continue
             
             # Check if this exception type can be automated
             rule = automation_rules.get(reason_code, {'can_automate': False})
