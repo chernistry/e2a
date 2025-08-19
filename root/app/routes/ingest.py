@@ -46,7 +46,7 @@ tracer = get_tracer(__name__)
 
 
 @router.post("/events", response_model=IngestResponse)
-async def ingest_shopify_event(
+async def ingest_events_raw(
     event_data: Dict[str, Any],
     request: Request,
     db: AsyncSession = Depends(get_db_session)

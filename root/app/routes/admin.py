@@ -274,10 +274,11 @@ async def system_health(
             "active_connections": 0  # Would get actual connection count
         }
         
+        from datetime import datetime, timezone
         return {
             "status": "healthy",
             "components": health_info,
-            "timestamp": "2025-08-16T07:48:00Z"
+            "timestamp": datetime.now(timezone.utc).isoformat()
         }
 
 

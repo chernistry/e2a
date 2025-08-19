@@ -22,13 +22,16 @@ from app.storage.db import get_db_session
 from app.storage.models import OrderEvent, ExceptionRecord
 from app.schemas.ingest import IngestResponse, BatchIngestRequest, BatchIngestResponse
 from app.middleware.tenancy import get_tenant_id
-from app.observability.tracing import tracer
+from app.observability.tracing import get_tracer
 from app.resilience.circuit_breaker import CircuitBreaker
 from app.resilience.rate_limiter import RateLimiter
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/ingest/v2", tags=["ingestion-optimized"])
+
+# Use module-specific tracer
+tracer = get_tracer(__name__)
 
 # Configuration
 BATCH_SIZE = 100
@@ -343,7 +346,7 @@ async def process_sla_evaluation(event_data: Dict[str, Any]):
     """Process SLA evaluation in background."""
     try:
         # Import here to avoid circular imports
-        from app.services.sla_evaluator import evaluate_sla
+        from app.services.sla_engine import evaluate_sla
         
         # Get fresh DB session for background processing
         async with get_db_session() as db:

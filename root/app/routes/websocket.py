@@ -117,10 +117,12 @@ async def _send_periodic_metrics(
             await asyncio.sleep(30)
             
             # Generate mock metrics (replace with real data later)
+            from datetime import datetime, timezone
+            now_iso = datetime.now(timezone.utc).isoformat()
             metrics_message = {
                 "type": "metrics:update",
                 "payload": {
-                    "timestamp": "2025-08-16T16:04:02.500Z",
+                    "timestamp": now_iso,
                     "sla_compliance_rate": 0.95,
                     "active_exceptions": 12,
                     "events_processed_per_minute": 150,
@@ -131,11 +133,11 @@ async def _send_periodic_metrics(
                             "tenant": tenant,
                             "exception_count": 12,
                             "sla_compliance": 0.95,
-                            "last_updated": "2025-08-16T16:04:02.500Z"
+                            "last_updated": now_iso
                         }
                     ]
                 },
-                "timestamp": "2025-08-16T16:04:02.500Z"
+                "timestamp": now_iso
             }
             
             # Send to this specific tenant
@@ -187,10 +189,12 @@ async def broadcast_exception_created(tenant: str, exception_data: Dict[str, Any
         exception_data (Dict[str, Any]): Exception details to broadcast
     """
     manager = get_connection_manager()
+    from datetime import datetime, timezone
+    now_iso = datetime.now(timezone.utc).isoformat()
     message = {
         "type": "exception:created",
         "payload": exception_data,
-        "timestamp": "2025-08-16T16:04:02.500Z"
+        "timestamp": now_iso
     }
     await manager.broadcast_to_tenant(tenant, message)
 
@@ -208,10 +212,12 @@ async def broadcast_exception_updated(tenant: str, exception_data: Dict[str, Any
         exception_data (Dict[str, Any]): Updated exception details
     """
     manager = get_connection_manager()
+    from datetime import datetime, timezone
+    now_iso = datetime.now(timezone.utc).isoformat()
     message = {
         "type": "exception:updated",
         "payload": exception_data,
-        "timestamp": "2025-08-16T16:04:02.500Z"
+        "timestamp": now_iso
     }
     await manager.broadcast_to_tenant(tenant, message)
 
@@ -229,10 +235,12 @@ async def broadcast_exception_resolved(tenant: str, exception_data: Dict[str, An
         exception_data (Dict[str, Any]): Resolved exception details
     """
     manager = get_connection_manager()
+    from datetime import datetime, timezone
+    now_iso = datetime.now(timezone.utc).isoformat()
     message = {
         "type": "exception:resolved",
         "payload": exception_data,
-        "timestamp": "2025-08-16T16:04:02.500Z"
+        "timestamp": now_iso
     }
     await manager.broadcast_to_tenant(tenant, message)
 
@@ -255,14 +263,16 @@ async def broadcast_health_status_change(
         details (Dict[str, Any], optional): Additional status details
     """
     manager = get_connection_manager()
+    from datetime import datetime, timezone
+    now_iso = datetime.now(timezone.utc).isoformat()
     message = {
         "type": "health:status_change",
         "payload": {
             "service": service,
             "status": status,
             "details": details or {},
-            "timestamp": "2025-08-16T16:04:02.500Z"
+            "timestamp": now_iso
         },
-        "timestamp": "2025-08-16T16:04:02.500Z"
+        "timestamp": now_iso
     }
     await manager.broadcast_to_all(message)
