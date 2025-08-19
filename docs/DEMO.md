@@ -175,7 +175,6 @@ return hashlib.md5(signature_data.encode()).hexdigest()
 These implementations are suitable for demonstration purposes:
 
 - **Shopify Mock Generator** - Essential for generating realistic demo data
-- **In-memory caching** - Acceptable alternative to Redis for demo
 - **SQLite database** - Appropriate database choice for demo vs PostgreSQL  
 - **Hardcoded configurations** - Standard practice for demo vs dynamic config
 - **Basic metrics** - Simplified metrics suitable for demo vs full Prometheus integration

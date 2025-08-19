@@ -4,28 +4,31 @@
 AI Exception Analyst service for generating exception narratives.
 
 This module provides comprehensive AI-powered exception analysis
-with intelligent fallback mechanisms, caching, and PII redaction
+with intelligent fallback mechanisms, Redis caching, and PII redaction
 for secure and reliable exception handling across all tenants.
 """
 
 import hashlib
+import json
 from typing import Dict, Any, Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.storage.models import ExceptionRecord
+from app.storage.redis import get_redis_client
 from app.services.ai_client import get_ai_client
 from app.schemas.ai import ExceptionLabel
 from app.settings import settings
 from app.observability.tracing import get_tracer
-from app.observability.metrics import ai_fallback_rate, ai_confidence_score
+from app.observability.metrics import ai_fallback_rate, ai_confidence_score, cache_hits_total, cache_misses_total
 from app.security.pii import redact_context
 
 
 tracer = get_tracer(__name__)
 
-# In-memory cache for AI responses (keyed by content hash)
-_analysis_cache: Dict[str, Dict[str, Any]] = {}
+# Cache configuration
+CACHE_TTL_SECONDS = 3600  # 1 hour
+CACHE_KEY_PREFIX = "ai_analysis:"
 
 
 # ==== MAIN ANALYSIS FUNCTION ==== #
@@ -133,7 +136,7 @@ async def _try_ai_analysis(exception: ExceptionRecord) -> Optional[Dict[str, Any
     Try to analyze exception using AI.
     
     Attempts AI-powered exception analysis with comprehensive
-    caching and error handling for optimal performance and reliability.
+    Redis caching and error handling for optimal performance and reliability.
     
     Args:
         exception (ExceptionRecord): Exception record to analyze
@@ -144,15 +147,24 @@ async def _try_ai_analysis(exception: ExceptionRecord) -> Optional[Dict[str, Any
     print(f"🔍 Attempting AI analysis for exception {exception.id}")
     
     try:
-        # Check cache first
+        # Check Redis cache first
         cache_key = _get_cache_key(exception)
-        print(f"🔑 Cache key: {cache_key}")
+        redis_key = f"{CACHE_KEY_PREFIX}{cache_key}"
+        print(f"🔑 Cache key: {redis_key}")
         
-        if cache_key in _analysis_cache:
-            print(f"💾 Cache hit for exception {exception.id}")
-            return _analysis_cache[cache_key]
+        try:
+            redis_client = await get_redis_client()
+            cached_result = await redis_client.get(redis_key)
+            
+            if cached_result:
+                print(f"💾 Redis cache hit for exception {exception.id}")
+                cache_hits_total.labels(cache_type="ai_analysis").inc()
+                return json.loads(cached_result)
+        except Exception as redis_error:
+            print(f"⚠️ Redis cache check failed: {redis_error}, proceeding without cache")
         
         print(f"🆕 Cache miss, making AI request for exception {exception.id}")
+        cache_misses_total.labels(cache_type="ai_analysis").inc()
         
         # Prepare context for AI
         context = _prepare_ai_context(exception)
@@ -165,9 +177,17 @@ async def _try_ai_analysis(exception: ExceptionRecord) -> Optional[Dict[str, Any
         result = await ai_client.classify_exception(context)
         print(f"✅ AI analysis result for {exception.id}: {result}")
         
-        # Cache the result
-        _analysis_cache[cache_key] = result
-        print(f"💾 Cached result for exception {exception.id}")
+        # Cache the result in Redis
+        try:
+            redis_client = await get_redis_client()
+            await redis_client.setex(
+                redis_key, 
+                CACHE_TTL_SECONDS, 
+                json.dumps(result)
+            )
+            print(f"💾 Cached result in Redis for exception {exception.id}")
+        except Exception as redis_error:
+            print(f"⚠️ Redis cache store failed: {redis_error}, continuing without caching")
         
         return result
         
@@ -410,18 +430,25 @@ def _generate_fallback_notes(exception: ExceptionRecord) -> Dict[str, str]:
 # ==== CACHE MANAGEMENT UTILITIES ==== #
 
 
-def clear_analysis_cache() -> None:
+async def clear_analysis_cache() -> None:
     """
     Clear the analysis cache.
     
     Provides manual cache clearing capability for memory management
     and testing scenarios requiring fresh AI analysis.
     """
-    global _analysis_cache
-    _analysis_cache.clear()
+    try:
+        redis_client = await get_redis_client()
+        # Delete all keys matching our cache prefix
+        keys = await redis_client.keys(f"{CACHE_KEY_PREFIX}*")
+        if keys:
+            await redis_client.delete(*keys)
+            print(f"🗑️ Cleared {len(keys)} AI analysis cache entries from Redis")
+    except Exception as e:
+        print(f"⚠️ Failed to clear Redis cache: {e}")
 
 
-def get_cache_stats() -> Dict[str, int]:
+async def get_cache_stats() -> Dict[str, int]:
     """
     Get cache statistics.
     
@@ -431,7 +458,27 @@ def get_cache_stats() -> Dict[str, int]:
     Returns:
         Dict[str, int]: Dictionary with cache statistics
     """
-    return {
-        "cache_size": len(_analysis_cache),
-        "max_cache_size": 1000  # Could be configurable
-    }
+    try:
+        redis_client = await get_redis_client()
+        keys = await redis_client.keys(f"{CACHE_KEY_PREFIX}*")
+        
+        # Get memory usage info if available
+        try:
+            info = await redis_client.info("memory")
+            memory_usage = info.get("used_memory", 0)
+        except:
+            memory_usage = 0
+        
+        return {
+            "cache_size": len(keys),
+            "memory_usage_bytes": memory_usage,
+            "cache_prefix": CACHE_KEY_PREFIX,
+            "ttl_seconds": CACHE_TTL_SECONDS
+        }
+    except Exception as e:
+        print(f"⚠️ Failed to get Redis cache stats: {e}")
+        return {
+            "cache_size": 0,
+            "memory_usage_bytes": 0,
+            "error": str(e)
+        }

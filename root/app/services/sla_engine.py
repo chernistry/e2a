@@ -49,19 +49,18 @@ class SLAEngine:
         """
         Initialize SLA engine with configuration caching.
         
-        Sets up reason code configuration and SLA config caching
+        Sets up reason code configuration and Redis-based SLA config caching
         for optimal performance during high-volume operations.
         """
         self.reason_config = get_reason_code_config()
-        # Cache SLA config to avoid repeated file I/O
-        self._sla_config_cache = {}
+        # SLA config will be cached in Redis instead of memory
     
 
     # ==== CONFIGURATION MANAGEMENT ==== #
     
-    def _get_cached_sla_config(self, tenant: str) -> Dict[str, any]:
+    async def _get_cached_sla_config(self, tenant: str) -> Dict[str, any]:
         """
-        Get cached SLA configuration for tenant.
+        Get cached SLA configuration for tenant from Redis.
         
         Implements intelligent caching with test environment bypass
         to support configuration mocking during testing.
@@ -75,10 +74,28 @@ class SLAEngine:
         # ⚠️ For testing, always reload config to allow mocking
         if os.environ.get("APP_ENV") == "test":
             return get_sla_config(tenant)
+        
+        cache_key = f"sla_config:{tenant}"
+        
+        try:
+            from app.storage.redis import get_redis_client
+            import json
             
-        if tenant not in self._sla_config_cache:
-            self._sla_config_cache[tenant] = get_sla_config(tenant)
-        return self._sla_config_cache[tenant]
+            redis_client = await get_redis_client()
+            cached_config = await redis_client.get(cache_key)
+            
+            if cached_config:
+                return json.loads(cached_config)
+            
+            # Load and cache config
+            config = get_sla_config(tenant)
+            await redis_client.setex(cache_key, 300, json.dumps(config))  # 5 min TTL
+            return config
+            
+        except Exception as e:
+            # Fallback to direct loading if Redis fails
+            print(f"⚠️ Redis SLA config cache failed: {e}, using direct load")
+            return get_sla_config(tenant)
 
 
     # ==== CORE SLA EVALUATION ==== #
@@ -122,8 +139,8 @@ class SLAEngine:
                 
                 span.set_attribute("events_found", len(events))
                 
-                # Get SLA configuration (cached)
-                sla_config = self._get_cached_sla_config(tenant)
+                # Get SLA configuration (Redis cached)
+                sla_config = await self._get_cached_sla_config(tenant)
                 
                 # Build event timeline
                 timeline = self._build_event_timeline(events)
