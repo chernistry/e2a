@@ -228,3 +228,16 @@ class IngestResponse(BaseModel):
                 "correlation_id": "550e8400-e29b-41d4-a716-446655440000"
             }
         }
+
+# Import batch processing schemas
+try:
+    from .ingest_batch import (
+        EventData,
+        BatchIngestRequest,
+        BatchIngestResponse,
+        StreamIngestResponse,
+        PerformanceStats
+    )
+except ImportError:
+    # Fallback if batch schemas not available
+    pass

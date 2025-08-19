@@ -8,8 +8,8 @@ metrics, system health monitoring, exception tracking, and trend analysis
 with full observability and tenant isolation support.
 """
 
-from datetime import datetime, timezone, timedelta
-from typing import Dict, Any, List
+from datetime import datetime, timedelta
+from typing import Dict, Any
 
 from fastapi import APIRouter, Depends, Request, Query
 from fastapi.responses import JSONResponse
@@ -18,16 +18,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from prometheus_client import REGISTRY
 
 from app.storage.db import get_db_session
-from app.storage.models import ExceptionRecord, OrderEvent, Invoice, DLQ
+from app.storage.models import ExceptionRecord, OrderEvent, Invoice
 from app.services.resilience_manager import get_resilience_manager, ResilienceManager
 from app.middleware.tenancy import get_tenant_id
 from app.observability.tracing import get_tracer
 from app.observability.logging import ContextualLogger
-from app.observability.metrics import (
-    ingest_success_total, ingest_errors_total, 
-    sla_breach_count, ai_requests_total, ai_confidence_score,
-    active_exceptions, dlq_depth
-)
 
 
 logger = ContextualLogger(__name__)

@@ -2,9 +2,9 @@
 
 import asyncio
 import functools
-from typing import Any, Callable, Optional, TypeVar, Union
+from typing import Callable, Optional, TypeVar
 
-from .circuit_breaker import CircuitBreaker, CircuitBreakerConfig, get_circuit_breaker
+from .circuit_breaker import CircuitBreakerConfig, get_circuit_breaker
 from .retry_policies import RetryPolicy, retry_async_operation, retry_sync_operation
 from app.observability.tracing import get_tracer
 

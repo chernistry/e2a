@@ -12,9 +12,9 @@ import json
 import asyncio
 from datetime import datetime, timezone
 from typing import Dict, List, Set, Optional, Any
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass
 
-from fastapi import WebSocket, WebSocketDisconnect
+from fastapi import WebSocket
 
 from app.observability.tracing import get_tracer
 from app.observability.logging import ContextualLogger

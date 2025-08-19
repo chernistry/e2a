@@ -7,8 +7,7 @@ This module provides endpoints for retrieving detailed exception information
 including customer data, order details, and AI analysis results.
 """
 
-from datetime import datetime, timezone
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 
 from fastapi import APIRouter, Depends, Request, HTTPException
 from sqlalchemy import select

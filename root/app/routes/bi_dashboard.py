@@ -6,13 +6,12 @@ metrics, trend analysis, and actionable visualizations.
 """
 
 from datetime import datetime, timedelta
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List
 from fastapi import APIRouter, Depends, Query, HTTPException
-from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.storage.db import get_db_session
-from app.services.bi_metrics import BIMetricsService, KPIResult, ChartData
+from app.services.bi_metrics import BIMetricsService, KPIResult
 from app.middleware.tenancy import get_tenant_id
 from app.observability.tracing import get_tracer
 from app.observability.logging import ContextualLogger

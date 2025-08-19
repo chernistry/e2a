@@ -11,7 +11,7 @@ for logistics operations.
 import datetime as dt
 import os
 from datetime import timezone
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession

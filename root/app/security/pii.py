@@ -9,7 +9,7 @@ sanitization for AI processing and logging compliance.
 """
 
 import re
-from typing import Dict, Any, Union
+from typing import Dict, Any
 
 
 # ==== PII DETECTION PATTERNS ==== #

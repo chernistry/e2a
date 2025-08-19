@@ -8,9 +8,8 @@ that should trigger exceptions, such as invalid addresses, payment problems,
 inventory shortages, and delivery delays.
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Dict, Any, Optional, List
-import re
 
 from app.observability.tracing import get_tracer
 

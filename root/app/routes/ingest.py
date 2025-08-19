@@ -395,7 +395,7 @@ async def _process_event(
                 
                 return IngestResponse(**response_data)
                 
-            except IntegrityError as e:
+            except IntegrityError:
                 # Handle duplicate constraint violations gracefully
                 await db.rollback()
                 

@@ -368,7 +368,7 @@ class AIClient:
             # Use prompt loader with Jinja2 templating
             return self.prompt_loader.get_exception_classification_prompt(**context)
             
-        except (FileNotFoundError, KeyError) as e:
+        except (FileNotFoundError, KeyError):
             # Fallback to inline prompt if external file fails
             return f"""
 Analyze this logistics exception and provide a JSON response with the following structure:
@@ -418,7 +418,7 @@ Provide actionable insights while maintaining customer confidence.
                 policy_content=policy_content
             )
             
-        except (FileNotFoundError, KeyError) as e:
+        except (FileNotFoundError, KeyError):
             # Fallback to inline prompt if external file fails
             return f"""
 Act as a senior QA engineer reviewing this {policy_type} policy configuration.

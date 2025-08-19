@@ -8,9 +8,8 @@ identification, request scope injection, and validation for secure multi-tenant
 operations across all API endpoints.
 """
 
-from typing import Callable, Awaitable
 
-from fastapi import Request, HTTPException
+from fastapi import Request
 from starlette.types import ASGIApp, Scope, Receive, Send
 
 from app.observability.tracing import get_tracer

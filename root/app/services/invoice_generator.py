@@ -13,7 +13,7 @@ from typing import Dict, Any, List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
 
-from app.storage.models import OrderEvent, Invoice, Tenant
+from app.storage.models import OrderEvent, Invoice
 from app.services.billing import compute_amount_cents
 from app.observability.tracing import get_tracer
 from app.observability.logging import ContextualLogger

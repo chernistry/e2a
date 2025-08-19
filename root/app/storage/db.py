@@ -23,8 +23,6 @@ from sqlalchemy.pool import NullPool
 
 from app.settings import settings
 from app.observability.metrics import db_connections_active
-from app.resilience.decorators import database_resilient
-from app.resilience.circuit_breaker import CircuitBreakerError
 
 
 # ==== SQLALCHEMY CONFIGURATION ==== #

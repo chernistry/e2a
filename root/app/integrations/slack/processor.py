@@ -1,14 +1,12 @@
 """Slack event processor for Oktup E²A."""
 
-import asyncio
 import logging
 import re
 import time
-from typing import Dict, List, Optional
+from typing import List, Optional
 
 import httpx
-from sqlalchemy import and_, desc, func, or_, select
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import desc, or_, select
 
 from app.integrations.slack.models import (
     ExceptionSummary,

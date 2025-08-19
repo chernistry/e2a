@@ -11,7 +11,6 @@ with comprehensive observability and metrics integration.
 import asyncio
 from typing import Dict, Any, Optional
 
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.settings import settings
 from app.storage.redis import get_redis_client

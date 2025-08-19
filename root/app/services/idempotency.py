@@ -8,7 +8,6 @@ duplicate detection, distributed locking, and automatic cleanup mechanisms
 for high-volume event processing with guaranteed exactly-once semantics.
 """
 
-import asyncio
 from typing import Optional
 
 import redis.asyncio as redis
@@ -17,7 +16,6 @@ from app.settings import settings
 from app.observability.tracing import get_tracer
 from app.observability.metrics import cache_hits_total, cache_misses_total
 from app.resilience.decorators import redis_resilient
-from app.resilience.circuit_breaker import CircuitBreakerError
 
 
 # ==== MODULE INITIALIZATION ==== #

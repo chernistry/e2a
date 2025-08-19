@@ -8,11 +8,9 @@ support, caching, fallback mechanisms, and template variable rendering
 for AI-powered operations and content generation.
 """
 
-import os
 from pathlib import Path
 from typing import Dict, Optional, Any
 from functools import lru_cache
-import logging
 
 try:
     from jinja2 import Template, Environment, FileSystemLoader

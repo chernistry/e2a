@@ -11,8 +11,7 @@ extraction for exception classification and policy linting.
 
 import json
 import re
-import logging
-from typing import Optional, Dict, Any, Union
+from typing import Optional, Dict, Any
 import asyncio
 from pydantic import BaseModel, Field, field_validator
 

@@ -1,11 +1,8 @@
 """Retry policies for different types of operations."""
 
-import asyncio
-import random
-import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Any, Callable, Optional, Type, Union
+from typing import Any, Callable, Optional
 
 from tenacity import (
     retry,
@@ -13,10 +10,7 @@ from tenacity import (
     wait_exponential,
     wait_fixed,
     wait_random_exponential,
-    retry_if_exception_type,
-    retry_if_result,
-    before_sleep_log,
-    after_log
+    retry_if_exception_type
 )
 import httpx
 import redis.asyncio as redis

@@ -8,10 +8,10 @@ including CRUD operations, filtering, pagination, and statistical analysis
 with full observability and tenant isolation support.
 """
 
-from typing import List, Optional, Dict, Any
+from typing import Optional, Dict, Any
 
 from fastapi import APIRouter, Depends, Request, HTTPException, Query
-from sqlalchemy import select, func, and_, text
+from sqlalchemy import select, func, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.schemas.exception import (

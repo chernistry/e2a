@@ -6,11 +6,10 @@ metrics for executive and operational decision-making.
 """
 
 from datetime import datetime, timedelta
-from typing import Dict, Any, List, Optional, Tuple
+from typing import Dict, Any, List
 from dataclasses import dataclass
-from sqlalchemy import select, func, and_, desc, text, case
+from sqlalchemy import select, func, and_, text
 from sqlalchemy.ext.asyncio import AsyncSession
-from prometheus_client import REGISTRY
 import numpy as np
 from scipy import stats
 

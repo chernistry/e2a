@@ -9,13 +9,11 @@ for failed operations across all tenant environments.
 """
 
 import asyncio
-from typing import List
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.storage.dlq import fetch_batch, mark_retry_attempt
 from app.observability.tracing import get_tracer
-from app.observability.metrics import replay_success_total, replay_failures_total
 
 
 tracer = get_tracer(__name__)

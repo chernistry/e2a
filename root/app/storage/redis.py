@@ -14,7 +14,6 @@ import redis.asyncio as redis
 
 from app.settings import settings
 from app.resilience.decorators import redis_resilient
-from app.resilience.circuit_breaker import CircuitBreakerError
 
 
 # ==== GLOBAL CLIENT INSTANCE ==== #

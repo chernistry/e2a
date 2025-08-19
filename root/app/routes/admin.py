@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.storage.db import get_db_session
 from app.storage.dlq import (
-    fetch_batch, mark_retry_attempt, get_dlq_stats, cleanup_old_items
+    get_dlq_stats, cleanup_old_items
 )
 from app.services.replay import replay_dlq_batch
 from app.services.ai_rule_lint import lint_policy_rules

@@ -10,6 +10,7 @@ observability, and error handling for the SLA monitoring and invoice validation 
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from typing import AsyncGenerator
+import logging
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -23,6 +24,8 @@ from app.observability.metrics import init_metrics, metrics_router
 from app.observability.logging import init_logging
 from app.middleware.correlation import CorrelationMiddleware
 from app.middleware.tenancy import TenancyMiddleware
+
+logger = logging.getLogger(__name__)
 from app.routes import (
     ingest, exceptions, admin, health, websocket, dashboard, slack, exception_details
 )
@@ -114,6 +117,27 @@ def create_app() -> FastAPI:
     
     # --► OPENTELEMETRY INSTRUMENTATION
     FastAPIInstrumentor.instrument_app(app)
+    
+    # --► STARTUP AND SHUTDOWN HANDLERS
+    @app.on_event("startup")
+    async def startup_event():
+        """Initialize background processors for optimized ingestion."""
+        try:
+            from app.routes.ingest_optimized import start_background_processors
+            await start_background_processors()
+            logger.info("Started optimized ingestion background processors")
+        except ImportError:
+            logger.info("Optimized ingestion not available, skipping background processors")
+
+    @app.on_event("shutdown")
+    async def shutdown_event():
+        """Cleanup background processors."""
+        try:
+            from app.routes.ingest_optimized import stop_background_processors
+            await stop_background_processors()
+            logger.info("Stopped optimized ingestion background processors")
+        except ImportError:
+            pass
     
     return app
 
@@ -253,6 +277,14 @@ def _register_routers(app: FastAPI) -> None:
     app.include_router(exception_details.router, prefix="/api", tags=["exception-details"])
     app.include_router(websocket.router, prefix="/api", tags=["websocket"])
     app.include_router(ingest.router, prefix="/ingest", tags=["ingest"])
+    
+    # Add optimized ingestion routes
+    try:
+        from app.routes import ingest_optimized
+        app.include_router(ingest_optimized.router, prefix="", tags=["ingest-optimized"])
+    except ImportError:
+        logger.warning("Optimized ingestion routes not available")
+    
     app.include_router(exceptions.router, prefix="/exceptions", tags=["exceptions"])
     app.include_router(admin.router, prefix="/admin", tags=["admin"])
     app.include_router(slack.router, prefix="/api", tags=["slack"])

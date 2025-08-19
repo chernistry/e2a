@@ -1,6 +1,5 @@
 """RAG (Retrieval-Augmented Generation) service for Slack integration."""
 
-import asyncio
 import logging
 from typing import Dict, List, Optional
 

@@ -4,7 +4,7 @@ import datetime as dt
 import traceback
 from typing import Dict, Any, List
 
-from sqlalchemy import select, update
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.storage.models import DLQ

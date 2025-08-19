@@ -76,7 +76,7 @@ async def lint_policy_rules(
                 processing_time_ms=processing_time
             )
             
-        except Exception as e:
+        except Exception:
             # Fallback to rule-based linting
             span.set_attribute("ai_failed", True)
             span.set_attribute("fallback_used", True)

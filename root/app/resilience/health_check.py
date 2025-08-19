@@ -4,7 +4,7 @@ import asyncio
 import time
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Dict, List, Optional, Callable, Any
+from typing import Dict, Optional, Callable, Any
 
 import httpx
 import redis.asyncio as redis

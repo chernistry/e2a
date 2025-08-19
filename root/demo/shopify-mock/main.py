@@ -9,6 +9,7 @@ Provides realistic orders, customers, and webhook simulation.
 import asyncio
 import os
 import random
+import time
 from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional
 
@@ -207,20 +208,87 @@ async def send_webhook(topic: str, order: Dict):
         print(f"Webhook failed: {e}")
 
 
+async def send_batch_webhook(events: List[Dict]):
+    """Send batch webhook to Octup E²A optimized API."""
+    await asyncio.sleep(WEBHOOK_DELAY_SECONDS)
+    
+    batch_payload = {
+        "events": events,
+        "batch_id": f"batch_{int(time.time())}",
+        "priority": "normal"
+    }
+    
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            # Try optimized batch endpoint first
+            try:
+                response = await client.post(
+                    f"{OCTUP_API_URL}/ingest/v2/events/batch",
+                    json=batch_payload,
+                    headers={"X-Tenant-Id": "demo-3pl"}
+                )
+                
+                if response.status_code == 200:
+                    result = response.json()
+                    print(f"Batch webhook sent: {result.get('processed_count', 0)} events processed - Status: {response.status_code}")
+                    return
+                else:
+                    print(f"Batch webhook failed with status {response.status_code}, falling back to individual webhooks")
+                    
+            except Exception as batch_error:
+                print(f"Batch webhook failed: {batch_error}, falling back to individual webhooks")
+            
+            # Fallback to individual webhooks
+            success_count = 0
+            for event_data in events:
+                try:
+                    response = await client.post(
+                        f"{OCTUP_API_URL}/ingest/events",
+                        json=event_data,
+                        headers={"X-Tenant-Id": "demo-3pl"}
+                    )
+                    if response.status_code == 200:
+                        success_count += 1
+                except Exception:
+                    continue
+            
+            print(f"Fallback webhooks sent: {success_count}/{len(events)} events processed")
+            
+    except Exception as e:
+        print(f"All webhook attempts failed: {e}")
+
+
 # Demo endpoints
 @app.post("/demo/generate-batch")
 async def generate_demo_batch(background_tasks: BackgroundTasks):
-    """Generate a new batch of orders (1001-1999 orders) and send webhooks."""
+    """Generate a new batch of orders (1001-1999 orders) and send webhooks via batch API."""
     batch_size = random.randint(SHOPIFY_DEMO_API_PRODUCE_MIN_ORDERS, SHOPIFY_DEMO_API_PRODUCE_MAX_ORDERS)
     
     print(f"🎯 Manual batch generation requested: {batch_size} orders")
     
     new_orders = generate_batch_orders()
     
-    # Send webhooks for all new orders
-    print(f"📡 Sending {len(new_orders)} webhooks to API...")
+    # Send batch webhook to optimized API
+    print(f"📡 Sending batch of {len(new_orders)} events to optimized API...")
+    
+    # Prepare batch payload
+    batch_events = []
     for order in new_orders:
-        background_tasks.add_task(send_webhook, "orders/create", order)
+        event_data = {
+            "event_id": f"shopify_orders_create_{order['id']}",
+            "event_type": "order_created",
+            "order_id": order['name'],
+            "occurred_at": datetime.now().isoformat(),
+            "source": "shopify",
+            "data": {
+                "order": order,
+                "webhook_topic": "orders/create"
+            }
+        }
+        batch_events.append(event_data)
+    
+    # Send batch request
+    background_tasks.add_task(send_batch_webhook, batch_events)
     
     # Count problems
     orders_with_problems = sum(1 for o in orders_db.values() if o.get('has_problems'))
@@ -231,7 +299,7 @@ async def generate_demo_batch(background_tasks: BackgroundTasks):
         "total_orders": len(orders_db),
         "orders_with_problems": orders_with_problems,
         "problem_rate": f"{(orders_with_problems/len(orders_db)*100):.1f}%" if orders_db else "0%",
-        "webhooks_queued": len(new_orders),
+        "batch_events_queued": len(batch_events),
         "config": {
             "min_orders": SHOPIFY_DEMO_API_PRODUCE_MIN_ORDERS,
             "max_orders": SHOPIFY_DEMO_API_PRODUCE_MAX_ORDERS
