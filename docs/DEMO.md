@@ -145,6 +145,7 @@ The AI performs **root cause analysis** on logistics exceptions using available 
 **Current Implementation:**
 - ✅ Analyzes timing patterns (peak hours, weekends, operational context)
 - ✅ Evaluates delay severity and SLA impact (percentage overruns)
+- ✅ Examines available order data for patterns
 - ✅ Provides operational insights and prevention recommendations
 - ✅ Generates customer-friendly communications
 - ✅ Identifies priority factors for exception handling
@@ -152,13 +153,13 @@ The AI performs **root cause analysis** on logistics exceptions using available 
 **Data Sources Available:**
 ```python
 {
-    "exception_type": "PICK_DELAY",           # What happened
-    "delay_minutes": 60,                      # How severe
-    "delay_percentage": 50.0,                 # SLA impact
-    "hour_of_day": 15,                        # When (3 PM)
-    "day_of_week": "Monday",                  # Context
-    "is_peak_hours": True,                    # Operational pattern
-    "order_value": 1119.71                   # Business impact (if available)
+    "financial_status": "pending",               # Payment status
+    "fulfillment_status": "pending",             # Current state
+    "warehouse_events": [...],                   # Process tracking (when available)
+    "inventory_snapshot": [...],                 # Stock levels (when available)
+    "line_items": [...],                         # Order requirements
+    "shipping_address": {...},                   # Delivery details
+    "order_value": 1119.71                      # Business impact
 }
 ```
 

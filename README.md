@@ -16,9 +16,9 @@
 > 
 > See [`DEMO.md`](docs/DEMO.md) for detailed technical analysis. The architecture, patterns, and infrastructure components are production-ready, but business logic would need full implementation for production use.
 
-> **🚧 Active Development Notice**
+> **📊 Current Status**
 > 
-> This project is currently in active development. The UI dashboard may display mock/simulated data for demonstration purposes. Real production data integration is being implemented. Please refer to the [Quick Start Guide](docs/QUICKSTART.md) for current development status and known limitations.
+> This project demonstrates a functional 3PL exception management system. The UI dashboard displays real-time data from the demo system. Please refer to the [Quick Start Guide](docs/QUICKSTART.md) for setup instructions and [Demo Notes](docs/DEMO.md) for production considerations.
 
 E²A is an AI-powered SLA monitoring and invoice validation tool for logistics. It watches order events, catches SLA breaches in real-time, generates AI explanations, and validates invoices nightly with auto-adjustments.
 Includes foundation for Slack integration and realistic Shopify Mock API for demonstration.
