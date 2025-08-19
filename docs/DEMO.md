@@ -4,7 +4,25 @@ This document outlines functions that are simplified for demonstration purposes 
 
 ## ⚠️ **Functions Requiring Production Implementation**
 
-### 1. **Automated Exception Resolution** 
+### 1. **AI PII Handling**
+**File:** `app/services/ai_exception_analyst.py:_prepare_ai_context()`
+
+```python
+# DEMO: Return raw context without PII redaction
+return context
+```
+
+**Current Implementation:** Raw order data (including customer emails, addresses, phone numbers) is sent directly to external AI services without redaction.
+
+**Production Requirements:**
+- Comprehensive PII detection and redaction before AI processing
+- Isolated AI environments (on-premises or private cloud deployments)
+- Data anonymization techniques preserving analytical value
+- Compliance with GDPR, CCPA, and industry-specific regulations
+
+---
+
+### 2. **Automated Exception Resolution** 
 **File:** `flows/exception_management_flow.py:attempt_automated_resolution()`
 
 ```python
