@@ -297,7 +297,7 @@ sequenceDiagram
     
     Note over Prefect,Dashboard: Business Process Automation
     Prefect->>DB: Order Processing Pipeline<br/>Monitor stages + SLA compliance
-    Prefect->>DB: Exception Management Pipeline<br/>Smart resolution tracking (80% efficiency)
+    Prefect->>DB: Exception Management Pipeline<br/>Smart resolution tracking (80 percent efficiency)
     Prefect->>DB: Billing Management Pipeline<br/>Generate invoices, validate accuracy
     Prefect->>DB: Business Orchestrator<br/>Coordinate all processes
     Prefect-->>Dashboard: Update business metrics
@@ -327,7 +327,7 @@ flowchart LR
     
     subgraph "Exception Management Flow"
         ANALYZE[Analyze Exception<br/>Patterns]
-        PRIORITIZE[Prioritize Eligible<br/>Exceptions (80% efficiency)]
+        PRIORITIZE[Prioritize Eligible<br/>Exceptions - 80 percent efficiency]
         AUTO_RESOLVE[Attempt Automated<br/>Resolution + Tracking]
     end
     
