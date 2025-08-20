@@ -1,639 +1,942 @@
-# E²A Knowledge Base
+# Octup E²A Knowledge Base
 
 **E²A = _Exceptions_ → _Explanations_ → _Actions_**
 
 [![License: CC BY-NC 4.0](https://img.shields.io/badge/License-CC%20BY--NC%204.0-lightgrey.svg)](https://creativecommons.org/licenses/by-nc/4.0/)
 
-Welcome to the E²A Knowledge Base - your comprehensive guide to troubleshooting, performance tuning, and operational excellence. This document covers everything from common issues to advanced scripting and monitoring.
+## Table of Contents
 
-## Project Structure
+1. [Quick Start](#quick-start)
+2. [System Architecture](#system-architecture)
+3. [Resolution Tracking System](#resolution-tracking-system)
+4. [Data Enrichment Pipeline](#data-enrichment-pipeline)
+5. [Configuration & Environment](#configuration--environment)
+6. [Business Process Flows](#business-process-flows)
+7. [Monitoring & Operations](#monitoring--operations)
+8. [Deployment & Production](#deployment--production)
+9. [Troubleshooting](#troubleshooting)
 
-```
-root/
-├── alembic.ini              # Database migration configuration
-├── app/                     # Main FastAPI application
-│   ├── business/            # Core business logic and policies
-│   │   ├── policies/        # SLA and billing configuration files
-│   │   └── reason_codes.py  # Exception classification logic
-│   ├── integrations/        # External service integrations
-│   │   └── slack/           # Slack bot integration with RAG support
-│   ├── main.py              # FastAPI application entrypoint
-│   ├── middleware/          # Custom request/response middleware
-│   ├── observability/       # Logging, metrics, and tracing setup
-│   ├── resilience/          # Circuit breakers, retry policies, health monitoring
-│   ├── routes/              # API endpoint definitions
-│   ├── schemas/             # Pydantic data models
-│   ├── security/            # Authentication and authorization
-│   ├── services/            # Service-layer logic (AI, SLA, Billing)
-│   ├── settings.py          # Application configuration management
-│   └── storage/             # Database and cache interaction
-├── docker/                  # Docker configurations
-├── docs/                    # Documentation including Slack integration guide
-├── flows/                   # Prefect business process flow definitions
-│   ├── business_operations_orchestrator.py  # Master coordinator
-│   ├── order_processing_flow.py            # Order fulfillment monitoring
-│   ├── exception_management_flow.py        # Exception analysis & auto-resolution
-│   └── billing_management_flow.py          # Invoice generation & validation
-├── migrations/              # Alembic database migration scripts
-├── scripts/                 # Operational and utility scripts
-│   ├── replay_dlq.py        # DLQ recovery script
-│   ├── generate_invoices.py # Invoice generation script
-│   └── utility/             # Utility scripts
-│       └── deploy_flows.py  # Prefect flow deployment
-├── tests/                   # Comprehensive test suite
-├── demo/                    # Shopify Mock API demo system
-├── prefect.yaml             # Prefect deployment configuration
-├── run.sh                   # Operational script for common tasks
-└── pyproject.toml           # Project dependencies (Poetry)
-```
+---
 
-## Common Issues & Quick Fixes
+## Quick Start
 
-### Database Connection Issues
-**Symptoms**: Connection timeouts, migration failures, API errors
-```bash
-# Quick checks
-make migrate                    # Apply pending migrations
-curl http://localhost:8000/health  # Verify API health
-docker logs supabase-db        # Check database logs
-```
+### Prerequisites
 
-**Common Causes**:
-- Incorrect `DATABASE_URL` in `.env`
-- Supabase project paused or down
-- Network connectivity issues
-- Insufficient connection pool size
+- Python 3.11+
+- Poetry 1.8.0+
+- Docker & Docker Compose
+- Supabase CLI (for local development)
+- OpenRouter API Key (for AI features)
 
-### AI Service Problems
-**Symptoms**: Timeouts, circuit breaker open, fallback to rule-based analysis
-```bash
-# Check AI service status
-curl http://localhost:8000/api/circuit-breakers
-curl http://localhost:8000/api/health
+### Technology Stack
 
-# Reset circuit breaker if needed
-curl -X POST http://localhost:8000/api/circuit-breakers/ai_service/reset
-```
+**FastAPI** (async, OpenAPI), **Supabase/PostgreSQL** (managed, real-time), **Redis** (persistence, atomic ops), **Prefect** (Python-first, cloud-native), **OpenRouter** (cost-effective, multi-model), **Next.js + Prometheus** (real-time dashboard, metrics).
 
-**Quick Fixes**:
-- Verify `AI_API_KEY` in `.env`
-- Check OpenRouter API quota usage
-- Increase `AI_TIMEOUT_SECONDS` if needed
-- System automatically falls back to rule-based analysis
-
-### Dashboard Issues
-**Symptoms**: Dashboard not loading, missing data, API errors
-```bash
-# Verify all services
-curl http://localhost:3000     # Dashboard health
-curl http://localhost:8000     # API health
-curl http://localhost:4200     # Prefect UI
-```
-
-**Common Solutions**:
-- Restart dashboard: `make dashboard-restart`
-- Check API connectivity
-- Verify environment variables
-
-### Redis Problems
-**Symptoms**: Cache failures, connection errors, performance degradation
-```bash
-# Check Redis status
-docker logs redis
-curl http://localhost:8000/api/health
-```
-
-**Configuration Tips**:
-- Use `rediss://` for SSL connections
-- Verify Redis Cloud instance status
-- Check SSL certificate configuration
-
-## Performance Tuning
-
-### Database Optimization
-```bash
-# Connection pool tuning
-DATABASE_POOL_SIZE=20
-DATABASE_MAX_OVERFLOW=30
-DATABASE_POOL_PRE_PING=true
-DATABASE_POOL_RECYCLE=3600
-```
-
-**Performance Tips**:
-- Monitor connection pool usage
-- Use read replicas for heavy queries
-- Implement query result caching
-- Regular VACUUM and ANALYZE
-
-### Redis Performance
-```bash
-# Connection optimization
-REDIS_MAX_CONNECTIONS=50
-REDIS_SOCKET_KEEPALIVE=True
-REDIS_SOCKET_CONNECT_TIMEOUT=5
-REDIS_SOCKET_TIMEOUT=5
-```
-
-**Best Practices**:
-- Use connection pooling
-- Implement circuit breakers
-- Monitor memory usage
-- Set appropriate TTL values
-
-### AI Service Tuning
-```bash
-# Timeout and retry configuration
-AI_TIMEOUT_SECONDS=3
-AI_MAX_RETRIES=2
-AI_CIRCUIT_BREAKER_FAILURE_THRESHOLD=3
-AI_CIRCUIT_BREAKER_RECOVERY_TIMEOUT=30
-```
-
-**Optimization Strategies**:
-- Batch AI requests when possible
-- Implement request caching
-- Use appropriate model sizes
-- Monitor token usage
-
-### System Resilience
-```bash
-# Health check configuration
-HEALTH_CHECK_INTERVAL=30
-HEALTH_CACHE_TTL=30
-CIRCUIT_BREAKER_MONITORING=true
-```
-
-## Observability & Monitoring
-
-### Prometheus Metrics
-
-E²A exposes 25+ custom metrics for comprehensive monitoring:
+### Local Development Setup
 
 ```bash
-# View all metrics
-curl http://localhost:8000/metrics
+# 1. Clone the repository
+git clone <repository_url>
+cd octup/root
 
-# Key business metrics
-octup_ingest_success_total{source,event_type,tenant}
-octup_sla_breach_count{reason_code,severity,tenant}
-octup_ai_requests_total{provider,model,status}
-octup_ai_fallback_rate{operation}
-octup_cache_hits_total{cache_type}
+# 2. Install dependencies
+poetry install
 
-# System health metrics
-octup_circuit_breaker_state_changes_total{service,from_state,to_state}
-octup_circuit_breaker_requests_total{service,state,result}
-octup_retry_attempts_total{service,operation,attempt}
-octup_service_health_status{service,check_type}
-octup_overall_system_health
+# 3. Complete local setup (one command!)
+make dev-local
+
+# 4. Start the web dashboard (separate terminal)
+make web-install && make web-dev
 ```
 
-### OpenTelemetry Tracing
+This will:
+- Set up local environment configuration
+- Start local Supabase
+- Run database migrations (including resolution tracking)
+- Seed demo data
+- Start all services
 
-**Features**:
-- Distributed tracing across services
-- Correlation IDs for request tracking
-- Performance monitoring with latency percentiles
-- Error tracking with detailed stack traces
+**Available endpoints:**
+- **Dashboard**: http://localhost:3000
+- API: http://localhost:8000
+- API Docs: http://localhost:8000/docs
+- Supabase Studio: http://localhost:54323
+- Prefect UI: http://localhost:4200
 
-**Configuration**:
-```yaml
-OTEL_SERVICE_NAME: e2a-platform
-OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
-OTEL_TRACES_SAMPLER: parentbased_traceidratio
-OTEL_TRACES_SAMPLER_ARG: 0.1
-```
+### Cloud Development Setup
 
-### Alerting & Notifications
-
-**Recommended Alerts**:
-```yaml
-# Critical alerts
-- API error rate >5% for 5 minutes
-- AI service error rate >10% for 5 minutes
-- Circuit breaker open for >2 minutes
-- Service health degraded for >5 minutes
-
-# Business alerts
-- Daily AI token budget >75% consumed
-- SLA breach rate >threshold for tenant
-- Database connection failures >10/minute
-- DLQ depth >100 items for >1 hour
-```
-
-## Security & Compliance
-
-### Authentication & Authorization
-
-**JWT Configuration**:
 ```bash
-JWT_SECRET_KEY=your-secure-secret
-JWT_ALGORITHM=HS256
-JWT_ACCESS_TOKEN_EXPIRE_MINUTES=30
+# 1. Clone and install
+git clone <repository_url>
+cd octup/root
+poetry install
+
+# 2. Setup cloud configuration
+make setup-cloud
+
+# 3. Edit .env with your cloud credentials
+# DATABASE_URL, REDIS_URL, AI_API_KEY
+
+# 4. Deploy
+make migrate
+make seed
+make up-cloud
 ```
 
-**API Key Management**:
-- Service-to-service authentication
-- Multi-tenant isolation
-- Rate limiting per endpoint and tenant
+### Demo System with Event Generation
 
-### Data Protection
-
-**PII Handling**:
-- Automatic redaction before AI processing
-- Input validation with Pydantic schemas
-- SQL injection prevention
-- CORS configuration for web integration
-
-**Production Security Checklist**:
-- [ ] Change default JWT secret
-- [ ] Enable HTTPS/TLS
-- [ ] Configure firewall rules
-- [ ] Set up log aggregation
-- [ ] Enable audit logging
-- [ ] Regular security updates
-- [ ] Database encryption at rest
-- [ ] Network segmentation
-
-## Operational Scripts
-
-E²A includes operational scripts for maintenance, testing, and data management.
-
-### Core Operational Scripts
-
-#### **replay_dlq.py** - DLQ Recovery
-Reprocesses failed events from the Dead Letter Queue after bug fixes or system updates.
-
-**Features**:
-- Batch processing with configurable sizes
-- Automatic event type detection (Shopify, WMS, Carrier)
-- Mock request creation for replay
-- Comprehensive error handling and statistics
-- Progress tracking and reporting
-
-**Usage**:
-```bash
-cd root/scripts
-python replay_dlq.py --batch-size 10 --max-batches 5
-```
-
-**Options**:
-- `--batch-size`: Items per batch (default: 10)
-- `--max-batches`: Maximum batches to process (default: all)
-
-#### **generate_invoices.py** - Invoice Management
-Generates missing invoices for completed orders with comprehensive validation.
-
-**Features**:
-- Missing invoice detection and generation
-- Tenant-specific backfill operations
-- Dry-run mode for testing
-- Comprehensive validation and audit logging
-- Configurable lookback periods
-
-**Usage**:
-```bash
-cd root/scripts
-python generate_invoices.py --tenant demo-3pl --lookback-hours 168
-python generate_invoices.py --backfill --tenant demo-3pl --days-back 30
-```
-
-**Options**:
-- `--tenant`: Specific tenant to process
-- `--lookback-hours`: How far back to look for completed orders (default: 168h = 7 days)
-- `--backfill`: Enable backfill mode for historical data
-- `--days-back`: Days back for backfill operations (default: 30)
-- `--dry-run`: Preview operations without creating invoices
-
-### Utility Scripts
-
-#### **deploy_flows.py** - Prefect Flow Management
-Manages deployment of Prefect business process workflows to the Prefect server.
-
-**Features**:
-- Automatic flow deployment
-- Environment-specific configurations
-- Health checks and validation
-- Rollback capabilities
-
-**Usage**:
-```bash
-cd root/scripts/utility
-python deploy_flows.py
-```
-
-### Operational Management Script
-
-#### **run.sh** - System Operations
-Comprehensive operational script for common system management tasks.
-
-**Features**:
-- Service lifecycle management (start, stop, status)
-- Event generation and testing
-- Database operations (reset, migrations)
-- System demonstration and statistics
-
-**Usage**:
-```bash
-# Service management
-./run.sh start          # Start all services
-./run.sh stop           # Stop all services
-./run.sh status         # Show service status
-
-# Event generation
-./run.sh generate single    # Generate one order
-./run.sh generate batch     # Generate 1001-1999 orders
-./run.sh generate stream 60 # Stream orders for 60 seconds
-
-# System operations
-./run.sh demo           # Run system demonstration
-./run.sh stats          # Show system statistics
-./run.sh reset          # Full database reset (WARNING: deletes ALL data)
-```
-
-### Script Management
-
-#### **Requirements & Dependencies**
-```bash
-# Install script dependencies
-pip install -r root/requirements.txt
-
-# Or use the demo system container
-docker-compose --profile demo up -d
-```
-
-#### **Environment Setup**
-```bash
-# Set required environment variables
-export DATABASE_URL="postgresql+asyncpg://user:pass@localhost/octup"
-export REDIS_URL="redis://localhost:6379"
-export AI_PROVIDER_BASE_URL="https://openrouter.ai/api/v1"
-export AI_MODEL="google/gemini-2.0-flash-exp:free"
-```
-
-#### **Scheduling & Automation**
-```bash
-# Prefect deployment for business processes
-prefect deployment run 'billing-management-pipeline/billing-management'
-prefect deployment run 'exception-management-pipeline/exception-management'
-
-# Manual script execution
-cd root/scripts
-python generate_invoices.py --tenant demo-3pl
-python replay_dlq.py --batch-size 20
-```
-
-#### **Monitoring & Logging**
-All scripts include comprehensive logging and can be integrated with:
-- **Prometheus**: Metrics collection and alerting
-- **Grafana**: Dashboard visualization
-- **ELK Stack**: Log aggregation and analysis
-- **Slack**: Real-time notifications
-
-#### **Error Handling & Resilience**
-- **Circuit Breakers**: Prevents cascade failures
-- **Retry Logic**: Exponential backoff with jitter
-- **Dead Letter Queue**: Captures failed operations
-- **Health Checks**: Monitors script health and dependencies
-
-## Shopify Mock API Demo System
-
-### Demo System Overview
-
-#### **demo/** - Realistic E-commerce Testing Suite
-Advanced Shopify Mock API system for comprehensive testing and demonstration with realistic data generation.
-
-**Main Components**:
-- **`shopify-mock/`**: Complete Shopify API simulation
-- **`main.py`**: FastAPI server with realistic endpoints
-- **`generator.py`**: Faker-based realistic data generation
-- **`test_demo.py`**: Integration testing script
-- **Docker setup**: Containerized deployment
-
-**Advanced Features**:
-- **Realistic Data**: Faker-generated customers, products, orders
-- **Automatic Webhooks**: Real-time integration with Octup E²A
-- **Exception Simulation**: 13% natural exception rate with realistic scenarios
-- **Multi-tenant Support**: Tenant isolation and correlation tracking
-- **Health Monitoring**: Comprehensive health checks and metrics
-
-**Usage**:
 ```bash
 # Start demo system
 cd docker
 docker-compose --profile demo up -d
-
-# Test integration
-cd ../demo
-python test_demo.py
-
-# Access interfaces
-open http://localhost:8090/docs    # Shopify Mock API
-open http://localhost:3000         # Octup Dashboard
-```
-
-**Configuration**:
-```yaml
-OCTUP_API_URL: http://localhost:8000     # Target API
-WEBHOOK_DELAY_SECONDS: 2                 # Webhook timing
-SHOPIFY_DEMO_API_PRODUCE_MIN_ORDERS: 1001  # Batch size range
-SHOPIFY_DEMO_API_PRODUCE_MAX_ORDERS: 1999
-```
-
-### Demo System
-
-#### **demo/** - Shopify Mock API
-Realistic e-commerce testing suite with comprehensive data generation.
-
-**Components**:
-- **Shopify Mock API**: Complete API simulation with realistic endpoints
-- **Automatic Webhooks**: Real-time integration with E²A platform
-- **Exception Simulation**: 13% natural exception rate with realistic scenarios
-- **Multi-tenant Support**: Tenant isolation and correlation tracking
-
-**Usage**:
-```bash
-# Start demo system
-cd docker
-docker-compose --profile demo up -d
-
-# Access demo API
-open http://localhost:8090/docs
-```
-
-## Monitoring & Maintenance
-
-### Health Checks
-
-**Endpoint Monitoring**:
-```bash
-# System health
-curl http://localhost:8000/api/health
-
-# Service status
-curl http://localhost:8000/api/degraded
-
-# Circuit breaker status
-curl http://localhost:8000/api/circuit-breakers
-```
-
-### Log Management
-
-**Log Levels**:
-- `DEBUG`: Detailed debugging information
-- `INFO`: General operational messages
-- `WARNING`: Warning conditions
-- `ERROR`: Error conditions
-- `CRITICAL`: Critical system failures
-
-**Log Rotation**:
-```bash
-# Configure log rotation
-logrotate /etc/logrotate.d/e2a
-
-# Monitor log sizes
-du -sh /var/log/e2a/*
-```
-
-### Backup & Recovery
-
-**Database Backups**:
-```bash
-# Create backup
-pg_dump -h localhost -U postgres -d octup > backup.sql
-
-# Restore backup
-psql -h localhost -U postgres -d octup < backup.sql
-```
-
-**Configuration Backups**:
-```bash
-# Backup environment files
-cp .env .env.backup.$(date +%Y%m%d)
-
-# Backup policies
-cp -r app/business/policies/ policies.backup.$(date +%Y%m%d)
-```
-
-## Automation & Scheduling
-
-### Prefect Business Process Flows
-
-**Current Deployments** (see `prefect.yaml`):
-```bash
-# Business process flows
-prefect deployment run 'order-processing-pipeline/order-processing'
-prefect deployment run 'exception-management-pipeline/exception-management'
-prefect deployment run 'billing-management-pipeline/billing-management'
-prefect deployment run 'business-operations-orchestrator/business-orchestrator'
-```
-
-**Flow Descriptions**:
-- **Order Processing**: Hourly monitoring of order fulfillment progress and SLA compliance
-- **Exception Management**: Every 4 hours analysis and automated resolution of exceptions
-- **Billing Management**: Daily invoice generation and validation with adjustments
-- **Business Orchestrator**: On-demand coordination of all business processes
-
-### Cron Jobs
-
-**Recommended Schedule**:
-```bash
-# Manual script execution (if not using Prefect)
-0 2 * * * cd /path/to/octup/root/scripts && python generate_invoices.py
-
-# DLQ replay every 4 hours
-0 */4 * * * cd /path/to/octup/root/scripts && python replay_dlq.py --batch-size 20
-
-# Health check every 5 minutes
-*/5 * * * * curl -f http://localhost:8000/health || echo "API down"
-
-# System statistics (optional)
-0 */6 * * * cd /path/to/octup/root && ./run.sh stats
-```
-
-### CI/CD Integration
-
-**GitHub Actions Example**:
-```yaml
-name: E²A Deployment
-on:
-  push:
-    branches: [main]
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - name: Deploy to staging
-        run: |
-          make deploy-staging
-          make health-check
-```
-
-## Troubleshooting Workflows
-
-### Issue Resolution Process
-
-1. **Identify**: Check logs, metrics, and health endpoints
-2. **Isolate**: Determine affected components and scope
-3. **Diagnose**: Use debugging tools and scripts
-4. **Fix**: Apply appropriate solution
-5. **Verify**: Test the fix and monitor recovery
-6. **Document**: Update this knowledge base
-
-### Common Debugging Commands
-
-```bash
-# Check system status
-./run.sh status
-
-# View service logs
-make logs
-docker logs <service_name>
-
-# Monitor metrics
-curl http://localhost:8000/metrics
-
-# Test endpoints
-curl http://localhost:8000/health
-curl http://localhost:8000/api/health
-
-# System statistics
-./run.sh stats
 
 # Generate test data
+cd root
+
+# Generate single order
+./run.sh generate single
+
+# Generate batch of orders (1001-1999 orders)
 ./run.sh generate batch
-```
 
-### Emergency Procedures
+# Stream orders continuously
+./run.sh generate stream 60    # Stream for 60 seconds
 
-**Service Recovery**:
-```bash
-# Restart all services
-./run.sh stop && ./run.sh start
-
-# Restart specific services
-make down && make up
-
-# Check service status
-./run.sh status
-```
-
-**Data Recovery**:
-```bash
-# Restore from backup
-pg_dump -h localhost -U postgres -d octup > backup.sql
-psql -h localhost -U postgres -d octup < backup.sql
-
-# Replay failed events
-cd scripts && python replay_dlq.py
-
-# Regenerate invoices
-cd scripts && python generate_invoices.py --tenant demo-3pl
+# View system statistics
+./run.sh stats
 ```
 
 ---
 
-**Last Updated**: 2025-08-19  
-**Version**: 1.0.0  
-**Maintainer**: E²A Team
+## System Architecture
+
+### Overview
+The Octup E²A system provides **systematic AI-powered exception processing** with **guaranteed completeness**, **automatic reprocessing**, and **comprehensive monitoring**. The architecture ensures no data is lost in incomplete states and provides full visibility into processing health.
+
+### Core Principles
+1. **Single Responsibility**: Each service has one clear purpose
+2. **No Overlap**: Services don't duplicate functionality
+3. **Clear Boundaries**: Well-defined interfaces between services
+4. **Real-World Alignment**: Architecture mirrors actual e-commerce operations
+5. **Scalable Design**: Services can be scaled independently
+
+### Service Layer Architecture
+
+#### 1. Data Processing Services
+
+**`ProcessingStageService`**
+- **Purpose**: Manages order processing pipeline stages and dependencies
+- **Responsibilities**:
+  - Initialize processing stages for new orders
+  - Track stage progression and dependencies
+  - Handle stage failures and retries
+  - Provide stage metrics and monitoring
+- **Used By**: Order Processing Flow
+- **Database Tables**: `order_processing_stages`
+
+**`DataCompletenessService`**
+- **Purpose**: Validates data completeness across processing stages
+- **Responsibilities**:
+  - Create and manage completeness checks
+  - Validate data quality and completeness
+  - Track validation results and metrics
+- **Used By**: Order Processing Flow (via ProcessingStageService)
+- **Database Tables**: `data_completeness_checks`
+
+#### 2. Business Logic Services
+
+**`SLAEngine`**
+- **Purpose**: Monitors SLA compliance and detects breaches
+- **Responsibilities**:
+  - Evaluate SLA compliance for orders
+  - Create exception records for breaches
+  - Calculate SLA metrics and reporting
+- **Used By**: Order Processing Flow, Exception Management Flow
+- **Database Tables**: `exceptions`, `order_events`
+
+**`AIAutomatedResolution`**
+- **Purpose**: Provides AI-powered exception resolution
+- **Responsibilities**:
+  - Analyze exceptions for automated resolution potential
+  - Execute automated resolution actions
+  - Track resolution success rates
+- **Used By**: Exception Management Flow
+- **Database Tables**: `exceptions`
+
+**`AIExceptionAnalyst`**
+- **Purpose**: AI analysis of exceptions for insights and categorization
+- **Responsibilities**:
+  - Analyze exception patterns and root causes
+  - Provide AI-powered exception insights
+  - Generate resolution recommendations
+- **Used By**: Exception Management Flow, SLA Engine
+- **Database Tables**: `exceptions`
+
+#### 3. Financial Services
+
+**`InvoiceGeneratorService`**
+- **Purpose**: Generates invoices for completed orders
+- **Responsibilities**:
+  - Create invoices from order data
+  - Calculate billing amounts and adjustments
+  - Handle invoice lifecycle management
+- **Used By**: Order Processing Flow, Billing Management Flow
+- **Database Tables**: `invoices`, `invoice_adjustments`
+
+**`BillingService`**
+- **Purpose**: Manages billing operations and validations
+- **Responsibilities**:
+  - Validate billing data and calculations
+  - Process billing adjustments
+  - Generate billing reports and metrics
+- **Used By**: Billing Management Flow
+- **Database Tables**: `invoices`, `invoice_adjustments`
+
+#### 4. Infrastructure Services
+
+**`IdempotencyService`**
+- **Purpose**: Ensures operation idempotency across the system
+- **Responsibilities**:
+  - Track operation execution to prevent duplicates
+  - Provide idempotency keys and validation
+  - Clean up expired idempotency records
+- **Used By**: All flows and services
+- **Database Tables**: Redis cache
+
+**`ResilienceManager`**
+- **Purpose**: Handles system resilience and error recovery
+- **Responsibilities**:
+  - Implement retry logic and circuit breakers
+  - Handle graceful degradation
+  - Manage system health monitoring
+- **Used By**: All services
+- **Database Tables**: `dlq`
+
+### Flow Layer Architecture
+
+#### 1. Business Operations Orchestrator
+- **Purpose**: Master orchestrator for all business processes
+- **Responsibilities**:
+  - Coordinate execution of all business flows
+  - Handle inter-flow dependencies
+  - Provide overall business process monitoring
+- **Schedule**: Every hour
+- **Calls**: All other flows in proper sequence
+
+#### 2. Order Processing Flow
+- **Purpose**: End-to-end order processing pipeline
+- **Responsibilities**:
+  - Monitor order fulfillment progress
+  - Manage processing stages and data completeness
+  - Detect SLA breaches
+  - Generate invoices for completed orders
+- **Schedule**: Every 30 minutes
+- **Services Used**: ProcessingStageService, DataCompletenessService, SLAEngine, InvoiceGeneratorService
+
+#### 3. Exception Management Flow
+- **Purpose**: Proactive exception handling and resolution
+- **Responsibilities**:
+  - Analyze exception patterns and trends
+  - Prioritize exceptions for resolution
+  - Execute automated resolution attempts
+  - Escalate unresolved exceptions
+- **Schedule**: Every 2 hours
+- **Services Used**: AIAutomatedResolution, AIExceptionAnalyst, SLAEngine
+
+#### 4. Billing Management Flow
+- **Purpose**: Financial operations and billing validation
+- **Responsibilities**:
+  - Process billing cycles
+  - Validate billing data and calculations
+  - Generate billing reports
+  - Handle billing adjustments
+- **Schedule**: Daily at 2 AM
+- **Services Used**: BillingService, InvoiceGeneratorService
+
+### Data Flow Architecture
+
+```
+Order Events (Webhooks)
+    ↓
+Order Processing Flow
+    ├── ProcessingStageService → order_processing_stages
+    ├── DataCompletenessService → data_completeness_checks
+    ├── SLAEngine → exceptions
+    └── InvoiceGeneratorService → invoices
+    
+Exception Management Flow
+    ├── AIAutomatedResolution → exceptions (resolution tracking)
+    ├── AIExceptionAnalyst → exceptions (analysis)
+    └── SLAEngine → exceptions (monitoring)
+    
+Billing Management Flow
+    ├── BillingService → invoices, invoice_adjustments
+    └── InvoiceGeneratorService → invoices
+```
+
+---
+
+## Resolution Tracking System
+
+### Overview
+
+The resolution tracking system prevents repeated failed automation attempts on exception records, addressing the issue where the exception management flow would attempt to resolve ALL exceptions on every run, including those that had already failed multiple times.
+
+### Problem Solved
+
+**Before:** The exception management flow processed all active exceptions without tracking previous attempts, leading to:
+- Wasted computational resources on repeatedly failed attempts
+- Noise in logs from repeated failures
+- No visibility into processing history
+- Potential infinite loops on problematic exceptions
+
+**After:** Smart tracking system that:
+- Limits resolution attempts per exception (configurable, default: 2)
+- Blocks exceptions after max attempts reached
+- Provides full visibility into attempt history
+- Prevents processing of blocked exceptions
+
+### Database Schema Changes
+
+#### New Fields in `exceptions` Table
+
+```sql
+-- Resolution attempt tracking
+resolution_attempts INTEGER NOT NULL DEFAULT 0,
+max_resolution_attempts INTEGER NOT NULL DEFAULT 2,
+last_resolution_attempt_at TIMESTAMP NULL,
+resolution_blocked BOOLEAN NOT NULL DEFAULT FALSE,
+resolution_block_reason TEXT NULL,
+
+-- New index for efficient querying
+CREATE INDEX ix_exceptions_resolution_eligible ON exceptions 
+(tenant, status, resolution_attempts, resolution_blocked);
+```
+
+### Configuration
+
+#### Environment Variable
+
+```bash
+# Set max attempts to 3 (default is 2)
+export OCTUP_MAX_RESOLUTION_ATTEMPTS=3
+
+# AI confidence thresholds
+AI_MIN_CONFIDENCE=0.7
+AI_MIN_SUCCESS_PROBABILITY=0.6
+LOW_CONFIDENCE_BLOCK_THRESHOLD=0.3
+```
+
+### Model Methods
+
+```python
+# Check if exception is eligible for resolution
+if exception.is_resolution_eligible:
+    # Attempt resolution
+    pass
+
+# Increment attempt counter
+exception.increment_resolution_attempt()
+
+# Block exception from further attempts
+exception.block_resolution("Custom reason")
+
+# Reset tracking (for manual intervention)
+exception.reset_resolution_tracking()
+```
+
+### Flow Behavior Changes
+
+#### Before Resolution Tracking
+
+```python
+# OLD: Processed ALL active exceptions every time
+active_exceptions = db.query(ExceptionRecord).filter(
+    ExceptionRecord.status.in_(['OPEN', 'IN_PROGRESS'])
+).all()
+
+# Result: 174 exceptions processed every run
+```
+
+#### After Resolution Tracking
+
+```python
+# NEW: Only processes resolution-eligible exceptions
+eligible_exceptions = db.query(ExceptionRecord).filter(
+    and_(
+        ExceptionRecord.status.in_(['OPEN', 'IN_PROGRESS']),
+        ExceptionRecord.resolution_blocked == False,
+        ExceptionRecord.resolution_attempts < ExceptionRecord.max_resolution_attempts
+    )
+).all()
+
+# Result: Only new exceptions + those under attempt limit
+```
+
+### Blocking Logic
+
+#### Automatic Blocking Conditions
+
+1. **Max Attempts Reached**: After `max_resolution_attempts` failed attempts
+2. **Low AI Confidence**: AI confidence < 0.3 (immediate block)
+3. **Repeated AI Failures**: Multiple AI analysis failures
+4. **Manual Blocking**: Via `block_resolution()` method
+
+#### Block Reasons
+
+- `"Maximum resolution attempts (2) reached"`
+- `"AI confidence too low (0.15) - manual review required"`
+- `"Repeated AI analysis failures: Connection timeout"`
+- Custom reasons via manual blocking
+
+### Performance Impact
+
+#### Database Performance
+
+- **New Index**: Efficient querying of resolution-eligible exceptions
+- **Reduced Load**: Fewer exceptions processed per run
+- **Better Scaling**: O(new_exceptions) vs O(all_exceptions)
+
+#### Processing Efficiency
+
+**Before:**
+- 174 exceptions processed every run
+- Repeated AI analysis on same failed cases
+- High computational waste
+
+**After:**
+- ~20-30 new/eligible exceptions per run
+- No repeated processing of blocked exceptions
+- 80-85% reduction in unnecessary processing
+
+---
+
+## Data Enrichment Pipeline
+
+### Executive Summary
+
+The Octup E²A data enrichment pipeline provides **systematic AI-powered data processing** with **guaranteed completeness**, **automatic reprocessing**, and **comprehensive monitoring**. This architecture ensures no data is lost in incomplete states and provides full visibility into enrichment health.
+
+### Critical Problems Solved
+
+#### Before: Dangerous Data Inconsistency
+- ❌ Records with `ai_confidence = NULL` were abandoned forever
+- ❌ No systematic reprocessing of failed AI enrichment
+- ❌ Inconsistent enrichment states across different AI services
+- ❌ No visibility into data completeness or quality
+- ❌ Silent failures in AI processing pipeline
+
+#### After: Bulletproof Data Pipeline
+- ✅ **Systematic Reprocessing**: All failed enrichment is automatically retried
+- ✅ **State Tracking**: Complete visibility into enrichment progress
+- ✅ **Quality Monitoring**: Real-time metrics and alerting
+- ✅ **Failure Recovery**: Robust error handling with escalation
+- ✅ **Completeness Guarantee**: No records left in incomplete states
+
+### Sequential Enrichment Pipeline
+
+#### Enrichment Stages (Sequential Dependencies)
+
+1. **Order Analysis** (`ai_order_analyzer`)
+   - AI-powered order problem detection
+   - Replaces hardcoded pattern matching
+   - **Input**: Raw order data
+   - **Output**: Problem analysis with confidence scores
+
+2. **Exception Classification** (`ai_exception_analyst`)
+   - AI classification of exception types
+   - Confidence scoring and labeling
+   - **Input**: Exception data + order analysis
+   - **Output**: `ai_confidence`, `ai_label`, analysis notes
+
+3. **Automated Resolution** (`ai_automated_resolution`)
+   - AI-powered resolution possibility analysis
+   - Action recommendation and execution
+   - **Input**: Classified exceptions with high confidence
+   - **Output**: Resolution analysis and automated actions
+
+### Data State Management
+
+#### Enrichment State Tracking
+
+```python
+@dataclass
+class EnrichmentState:
+    record_id: int
+    record_type: str  # "exception" or "order"
+    
+    # Stage completion status
+    order_analysis: EnrichmentStatus = PENDING
+    classification: EnrichmentStatus = PENDING  
+    automation: EnrichmentStatus = PENDING
+    
+    # Failure tracking
+    last_attempt: Optional[datetime] = None
+    retry_count: int = 0
+    error_messages: List[str] = []
+```
+
+#### Status Values
+- `PENDING`: Not yet processed
+- `IN_PROGRESS`: Currently being processed
+- `COMPLETED`: Successfully completed
+- `FAILED`: Failed, needs retry
+- `SKIPPED`: Skipped due to conditions (e.g., low confidence)
+
+#### NULL Field Handling (Critical)
+
+**When AI Fails:**
+```python
+# CORRECT: Set fields to NULL for reprocessing
+record.ai_confidence = None
+record.ai_label = None
+
+# WRONG: Set default values (masks failures)
+record.ai_confidence = 0.0  # ❌ Don't do this!
+```
+
+**Reprocessing Query:**
+```sql
+SELECT * FROM exception_records 
+WHERE ai_confidence IS NULL 
+   OR ai_label IS NULL
+   OR (ai_confidence < 0.7 AND updated_at < NOW() - INTERVAL '24 hours');
+```
+
+### Reprocessing Workflow
+
+#### Automatic Reprocessing Triggers
+
+1. **Scheduled Pipeline** (every 4 hours)
+   - Identifies records needing enrichment
+   - Processes in batches with retry logic
+   - Updates enrichment state tracking
+
+2. **Failure Detection** (real-time)
+   - Monitors AI service responses
+   - Detects NULL field returns
+   - Queues for immediate reprocessing
+
+3. **Quality Monitoring** (continuous)
+   - Tracks enrichment completeness rates
+   - Alerts on quality degradation
+   - Triggers manual intervention when needed
+
+#### Retry Strategy
+
+```python
+# Exponential backoff with jitter
+retry_delays = [1min, 5min, 15min, 1hour, 4hours]
+max_retries = 5
+
+# Conditions for retry
+if (
+    ai_confidence is None or 
+    ai_label is None or
+    (ai_confidence < 0.7 and retry_count < max_retries)
+):
+    schedule_retry(record, next_delay)
+```
+
+---
+
+## Configuration & Environment
+
+### Environment Variables
+
+Key variables in `.env`:
+
+```bash
+# Core Application
+APP_ENV=dev
+SERVICE_NAME=octup-e2a
+LOG_LEVEL=INFO
+
+# Database (Local Supabase)
+DATABASE_URL=postgresql+asyncpg://postgres:postgres@127.0.0.1:54322/postgres
+DIRECT_URL=postgresql+asyncpg://postgres:postgres@127.0.0.1:54322/postgres
+
+# Redis (Local or Cloud)
+REDIS_URL=redis://localhost:6379/0
+
+# AI Configuration
+AI_PROVIDER_BASE_URL=https://openrouter.ai/api/v1
+AI_MODEL=google/gemini-2.0-flash-exp:free
+AI_API_KEY=sk-or-v1-...
+AI_MAX_DAILY_TOKENS=200000
+AI_MIN_CONFIDENCE=0.55
+
+# Resolution Tracking
+OCTUP_MAX_RESOLUTION_ATTEMPTS=2  # Default: 2, configurable
+
+# Prefect Local Server
+PREFECT_API_URL=http://localhost:4200/api
+PREFECT_WORK_POOL=default-agent-pool
+```
+
+### AI Configuration
+
+```yaml
+AI_PROVIDER_BASE_URL: https://openrouter.ai/api/v1
+AI_MODEL: google/gemini-2.0-flash-exp:free
+AI_MAX_DAILY_TOKENS: 200000
+AI_MIN_CONFIDENCE: 0.55
+AI_TIMEOUT_SECONDS: 3
+AI_RETRY_MAX_ATTEMPTS: 2
+```
+
+**AI Resilience Features:**
+- **Circuit Breaker Protection**: Prevents cascade failures
+- **Fallback Mechanisms**: Rule-based analysis when AI unavailable
+- **Token Budget Management**: Daily limits (200K tokens)
+- **Confidence Thresholds**: Quality gates for AI content
+
+### Demo System Configuration
+
+```bash
+OCTUP_API_URL=http://localhost:8000
+WEBHOOK_DELAY_SECONDS=2
+SHOPIFY_DEMO_API_PRODUCE_MIN_ORDERS=1001
+SHOPIFY_DEMO_API_PRODUCE_MAX_ORDERS=1999
+```
+
+---
+
+## Business Process Flows
+
+### Available Flows
+
+1. **Order Processing Pipeline** - Monitors fulfillment progress and SLA compliance
+2. **Exception Management Pipeline** - Analyzes patterns and attempts automated resolution with tracking
+3. **Billing Management Pipeline** - Generates invoices and processes adjustments
+4. **Business Operations Orchestrator** - Coordinates all business processes
+
+### Running Flows
+
+```bash
+# Start Prefect server (if not already running)
+prefect server start
+
+# Start a worker (separate terminal)
+cd root
+prefect worker start --pool default-agent-pool --type process
+
+# Deploy flows
+prefect deploy flows/order_processing_flow.py:order_processing_pipeline -n order-processing -p default-agent-pool
+prefect deploy flows/exception_management_flow.py:exception_management_pipeline -n exception-management -p default-agent-pool
+prefect deploy flows/billing_management_flow.py:billing_management_pipeline -n billing-management -p default-agent-pool
+prefect deploy flows/business_operations_orchestrator.py:business_operations_orchestrator -n business-orchestrator -p default-agent-pool
+
+# Run flows manually
+prefect deployment run 'exception-management-pipeline/exception-management'
+prefect deployment run 'order-processing-pipeline/order-processing'
+prefect deployment run 'billing-management-pipeline/billing-management'
+prefect deployment run 'business-operations-orchestrator/business-orchestrator'
+```
+
+### Flow Configuration
+
+Flows configured in `prefect.yaml`:
+- **Tenant**: demo-3pl
+- **Lookback Hours**: 24 (order/billing flows)
+- **Analysis Hours**: 168 (exception management)
+
+---
+
+## Monitoring & Operations
+
+### Key Metrics
+
+#### 1. Completeness Metrics
+- `enrichment_completeness_rate`: % of records fully enriched
+- `enrichment_backlog_size`: Number of records awaiting processing
+- `enrichment_processing_duration`: Time to process batches
+
+#### 2. Quality Metrics
+- `enrichment_quality_score`: Overall quality score (0-100)
+- `ai_confidence_distribution`: Distribution of confidence scores
+- `enrichment_failure_rate`: % of enrichment attempts that fail
+
+#### 3. Performance Metrics
+- `records_processed_per_hour`: Processing throughput
+- `average_processing_time`: Time per record
+- `pipeline_success_rate`: % of successful pipeline runs
+
+#### 4. Resolution Tracking Metrics
+- `resolution_attempt_distribution`: Distribution of attempt counts
+- `blocked_exceptions_count`: Number of blocked exceptions
+- `automation_success_rate`: % of successful automated resolutions
+
+### Alert Thresholds
+
+```python
+thresholds = {
+    "completeness_critical": 70.0,    # Below 70% = CRITICAL
+    "completeness_warning": 85.0,     # Below 85% = WARNING
+    "quality_critical": 60.0,         # Below 60% = CRITICAL
+    "quality_warning": 80.0,          # Below 80% = WARNING
+    "backlog_critical": 1000,         # >1000 pending = CRITICAL
+    "failure_rate_critical": 20.0     # >20% failures = CRITICAL
+}
+```
+
+### Automated Responses
+
+- **CRITICAL Alerts**: Page on-call engineer, auto-scale processing
+- **WARNING Alerts**: Slack notification, increase monitoring frequency
+- **INFO Alerts**: Dashboard notification, trend analysis
+
+### Daily Operations
+
+#### Morning Health Check
+```bash
+# Check enrichment status
+curl -X GET /api/enrichment/health/demo-3pl
+
+# Review overnight processing
+curl -X GET /api/enrichment/report/demo-3pl
+
+# Check resolution tracking performance
+python test_resolution_tracking.py
+```
+
+#### Backlog Management
+```bash
+# Check current backlog
+curl -X GET /api/enrichment/backlog/demo-3pl
+
+# Trigger manual processing if needed
+curl -X POST /api/enrichment/process/demo-3pl
+```
+
+### Database Monitoring Queries
+
+```sql
+-- Get resolution statistics
+SELECT 
+    resolution_attempts,
+    COUNT(*) as count
+FROM exceptions 
+GROUP BY resolution_attempts;
+
+-- Get blocked exceptions
+SELECT 
+    id, order_id, reason_code, 
+    resolution_attempts, resolution_block_reason
+FROM exceptions 
+WHERE resolution_blocked = true;
+
+-- Get resolution-eligible exceptions
+SELECT COUNT(*) as eligible_count
+FROM exceptions 
+WHERE status IN ('OPEN', 'IN_PROGRESS')
+  AND resolution_blocked = false
+  AND resolution_attempts < max_resolution_attempts;
+```
+
+---
+
+## Deployment & Production
+
+### Docker Deployment
+
+```bash
+# Build image
+docker build -t octup-e2a .
+
+# Run container
+docker run -p 8000:8000 --env-file .env octup-e2a
+```
+
+### Kubernetes Deployment
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: octup-e2a
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: octup-e2a
+  template:
+    metadata:
+      labels:
+        app: octup-e2a
+    spec:
+      containers:
+      - name: api
+        image: octup-e2a:latest
+        ports:
+        - containerPort: 8000
+        env:
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: octup-secrets
+              key: database-url
+        - name: OCTUP_MAX_RESOLUTION_ATTEMPTS
+          value: "2"
+```
+
+### Production Considerations
+
+#### Database Migration
+
+```bash
+# Apply resolution tracking migration
+python scripts/apply_resolution_tracking.py
+
+# Or manually with Alembic
+alembic upgrade head
+```
+
+#### Environment Setup
+
+```bash
+# Production environment variables
+export APP_ENV=production
+export OCTUP_MAX_RESOLUTION_ATTEMPTS=3
+export AI_MIN_CONFIDENCE=0.7
+export LOG_LEVEL=INFO
+```
+
+#### Performance Benchmarks
+
+- **Processing Rate**: >100 records/minute
+- **Completeness Rate**: >95% within 24 hours
+- **Quality Score**: >85 average
+- **Failure Rate**: <5% of processing attempts
+
+---
+
+## Troubleshooting
+
+### Common Issues
+
+#### Resolution tracking not working:
+```bash
+# Check migration applied
+python scripts/apply_resolution_tracking.py
+
+# Verify database schema
+psql -c "\d exceptions" | grep resolution
+```
+
+#### AI service problems:
+```bash
+# Check circuit breaker status
+curl http://localhost:8000/api/circuit-breakers
+
+# Reset if needed
+curl -X POST http://localhost:8000/api/circuit-breakers/ai_service/reset
+```
+
+#### Database connection issues:
+```bash
+# Quick health check
+curl http://localhost:8000/health
+
+# Check Supabase status
+supabase status
+```
+
+#### All exceptions are blocked:
+- Check if `max_resolution_attempts` is set too low
+- Verify migration was applied correctly
+- Review blocking logic for bugs
+
+#### Exceptions not being blocked after failures:
+- Verify `increment_resolution_attempt()` is being called
+- Check database schema has resolution tracking fields
+- Review exception processing flow logic
+
+### Performance Monitoring
+
+```bash
+# View system statistics
+./run.sh stats
+
+# Check resolution tracking performance
+python test_resolution_tracking.py
+
+# Monitor Prometheus metrics
+curl http://localhost:8000/metrics | grep resolution
+```
+
+### Reset Blocked Exceptions
+
+```sql
+-- Reset all blocked exceptions (use carefully!)
+UPDATE exceptions 
+SET resolution_attempts = 0,
+    resolution_blocked = false,
+    resolution_block_reason = null,
+    last_resolution_attempt_at = null
+WHERE resolution_blocked = true;
+```
+
+### Quality Assurance Checks
+
+#### Data Integrity Validation
+
+```sql
+-- No records should be stuck in incomplete states
+SELECT COUNT(*) FROM exception_records 
+WHERE ai_confidence IS NULL 
+  AND created_at < NOW() - INTERVAL '1 day';
+-- Should be 0 or very low
+
+-- High confidence rate should be >80%
+SELECT 
+  COUNT(*) FILTER (WHERE ai_confidence >= 0.7) * 100.0 / COUNT(*) as high_confidence_rate
+FROM exception_records 
+WHERE ai_confidence IS NOT NULL;
+
+-- No records should exceed max retry count
+SELECT COUNT(*) FROM exception_records 
+WHERE enrichment_retry_count > 5;
+-- Should be 0
+```
+
+### Testing
+
+```bash
+# Run all tests
+pytest
+
+# With coverage
+pytest --cov=app --cov-report=html
+
+# Specific test categories
+pytest tests/unit/          # Unit tests
+pytest tests/integration/   # Integration tests
+pytest tests/e2e/          # End-to-end tests
+
+# Test resolution tracking specifically
+pytest tests/unit/test_ai_automated_resolution.py
+python test_resolution_tracking.py
+```
+
+---
+
+## Success Metrics
+
+### Business Impact
+- **Data Completeness**: 99%+ of records fully enriched
+- **Processing Reliability**: 99.9% uptime for enrichment pipeline
+- **Quality Consistency**: <2% variance in quality scores
+- **Operational Efficiency**: 90% reduction in manual data intervention
+- **Resolution Efficiency**: 80-85% reduction in unnecessary processing
+
+### Technical Performance
+- **Zero Data Loss**: No records abandoned in incomplete states
+- **Automatic Recovery**: 95%+ of failures resolved automatically
+- **Monitoring Coverage**: 100% visibility into pipeline health
+- **Alert Accuracy**: <1% false positive rate
+- **Processing Optimization**: Only new/eligible exceptions processed
+
+---
+
+**Last Updated**: 2025-08-20

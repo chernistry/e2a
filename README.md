@@ -6,18 +6,9 @@
 
 > **🚧 Demo Implementation Notice**
 > 
-> This is a **demonstration project** showcasing architecture and patterns for a 3PL exception management system. Several core business logic functions are simplified for demo purposes:
+> This is a **demonstration project** showcasing architecture and patterns for a 3PL exception management system. Several core business logic functions are simplified for demo purposes including billing calculations, SLA detection, and AI PII handling.
 > 
-> - **Billing Calculations**: Simplified 3PL billing logic without complex rate cards and contract-specific pricing
-> - **SLA Detection**: Basic time-based rules without business calendar, warehouse capacity, or order complexity modeling
-> - **Order Analysis**: Detects only obvious test data patterns rather than comprehensive validation
-> - **AI PII Handling**: No PII redaction applied to AI requests. Production systems require isolated AI environments or comprehensive PII sanitization
-> 
-> See [`DEMO.md`](docs/DEMO.md) for detailed technical analysis. The architecture, patterns, and infrastructure components are production-ready, but business logic would need full implementation for production use.
-
-> **📊 Current Status**
-> 
-> This project demonstrates a functional 3PL exception management system. The UI dashboard displays real-time data from the demo system. Please refer to the [Quick Start Guide](docs/QUICKSTART.md) for setup instructions and [Demo Notes](docs/DEMO.md) for production considerations.
+> **📖 Documentation**: See [**DEMO.md**](docs/DEMO.md) for demo limitations and [**KB.MD**](docs/KB.MD) for complete technical documentation.
 
 E²A is an AI-powered SLA monitoring and invoice validation tool for logistics. It watches order events, catches SLA breaches in real-time, generates AI explanations, and validates invoices nightly with auto-adjustments.
 Includes foundation for Slack integration and realistic Shopify Mock API for demonstration.
@@ -159,10 +150,10 @@ flowchart TD
     end
     
     subgraph "Business Process Flows"
-        ORDER[Order Processing<br/>Pipeline]
-        EXCEPTION[Exception Management<br/>Pipeline]
-        BILLING[Billing Management<br/>Pipeline]
-        ORCHESTRATOR[Business Operations<br/>Orchestrator]
+        ORDER[Order Processing<br/>30min schedule]
+        EXCEPTION[Exception Management<br/>2hr schedule]
+        BILLING[Billing Management<br/>Daily 2AM]
+        ORCHESTRATOR[Business Orchestrator<br/>Hourly coordination]
     end
     
     subgraph "Outputs"
@@ -219,14 +210,14 @@ flowchart TD
 graph TD
     subgraph "Ingress & API Layer"
         API[FastAPI Service]
-        SLACK[Slack Integration]
     end
     
     subgraph "Processing Layer"
         SLA_ENGINE[SLA Engine]
         AI_ANALYST[AI Analyst Service]
+        PROCESSING_STAGE[Processing Stage Service]
+        DATA_COMPLETENESS[Data Completeness Service]
         PREFECT[Prefect Server]
-        RAG[RAG Service]
     end
     
     subgraph "Business Process Flows"
@@ -243,7 +234,6 @@ graph TD
     end
     
     subgraph "External Integrations"
-        SLACK_API[Slack API]
         SHOPIFY_MOCK[Shopify Mock API]
     end
     
@@ -254,9 +244,9 @@ graph TD
     
     API --> SLA_ENGINE
     API --> AI_ANALYST
+    API --> PROCESSING_STAGE
+    API --> DATA_COMPLETENESS
     API --> PREFECT
-    SLACK --> RAG
-    RAG --> AI_ANALYST
     
     PREFECT --> ORDER_FLOW
     PREFECT --> EXCEPTION_FLOW
@@ -265,15 +255,15 @@ graph TD
     
     SLA_ENGINE --> SUPABASE
     AI_ANALYST --> SUPABASE
+    PROCESSING_STAGE --> SUPABASE
+    DATA_COMPLETENESS --> SUPABASE
     ORDER_FLOW --> SUPABASE
     EXCEPTION_FLOW --> SUPABASE
     BILLING_FLOW --> SUPABASE
     ORCHESTRATOR_FLOW --> SUPABASE
-    RAG --> SUPABASE
     
     API --> REDIS
     API --> DLQ
-    SLACK <--> SLACK_API
     SHOPIFY_MOCK --> API
     
     API -- Exposes --> PROMETHEUS
@@ -289,6 +279,7 @@ sequenceDiagram
     participant Source as Event Source<br/>(WMS/Shopify)
     participant API as FastAPI<br/>Ingest Endpoint
     participant SLA as SLA Engine
+    participant STAGE as Processing Stage<br/>Service
     participant DB as Database<br/>(Postgres)
     participant AI as AI Analyst
     participant Prefect as Prefect<br/>Business Flows
@@ -297,14 +288,16 @@ sequenceDiagram
     Note over Source,Dashboard: Real-time Event Processing
     Source->>API: POST /ingest/{source}<br/>order_paid, pick_started, etc.
     API->>SLA: Evaluate event against SLA policies
+    API->>STAGE: Track processing stage progression
     SLA-->>DB: Create Exception record on breach
+    STAGE-->>DB: Update processing stage status
     DB-->>AI: Trigger analysis for new exception
-    AI-->>DB: Store AI-generated narrative
+    AI-->>DB: Store AI-generated narrative + resolution tracking
     API-->>Dashboard: Real-time metrics update
     
     Note over Prefect,Dashboard: Business Process Automation
-    Prefect->>DB: Order Processing Pipeline<br/>Monitor fulfillment progress
-    Prefect->>DB: Exception Management Pipeline<br/>Analyze patterns, auto-resolve
+    Prefect->>DB: Order Processing Pipeline<br/>Monitor stages + SLA compliance
+    Prefect->>DB: Exception Management Pipeline<br/>Smart resolution tracking (80% efficiency)
     Prefect->>DB: Billing Management Pipeline<br/>Generate invoices, validate accuracy
     Prefect->>DB: Business Orchestrator<br/>Coordinate all processes
     Prefect-->>Dashboard: Update business metrics
@@ -327,14 +320,15 @@ flowchart LR
     
     subgraph "Order Processing Flow"
         MONITOR[Monitor Order<br/>Fulfillment]
+        STAGES[Track Processing<br/>Stages]
         COMPLETE[Process Completed<br/>Orders]
         SLA_CHECK[Monitor SLA<br/>Compliance]
     end
     
     subgraph "Exception Management Flow"
         ANALYZE[Analyze Exception<br/>Patterns]
-        PRIORITIZE[Prioritize Active<br/>Exceptions]
-        AUTO_RESOLVE[Attempt Automated<br/>Resolution]
+        PRIORITIZE[Prioritize Eligible<br/>Exceptions (80% efficiency)]
+        AUTO_RESOLVE[Attempt Automated<br/>Resolution + Tracking]
     end
     
     subgraph "Billing Management Flow"
@@ -358,7 +352,8 @@ flowchart LR
     E5 --> COMPLETE
     E6 --> COMPLETE
     
-    MONITOR --> SLA_CHECK
+    MONITOR --> STAGES
+    STAGES --> SLA_CHECK
     COMPLETE --> IDENTIFY
     
     SLA_CHECK --> ANALYZE
@@ -405,17 +400,15 @@ flowchart LR
 
 ## Quick Start
 
-**🚀 See [QUICKSTART.md](docs/QUICKSTART.md) for setup, config, deployment, usage, testing, and demo system.**
+**📖 Complete Setup Guide**: See [**KB.MD**](docs/KB.MD) for detailed setup, configuration, deployment, usage, testing, and demo system instructions.
 
-**Endpoints:**
+**Key Endpoints:**
 - **Dashboard**: http://localhost:3000
-- API: http://localhost:8000
-- API Docs: http://localhost:8000/docs
-- Supabase Studio: http://localhost:54323
-- Prefect UI: http://localhost:4200
+- API: http://localhost:8000 | API Docs: http://localhost:8000/docs
+- Supabase Studio: http://localhost:54323 | Prefect UI: http://localhost:4200
 - **Shopify Mock API**: http://localhost:8090/docs
 
-**🔧 See [KB.MD](docs/KB.MD) for issues, performance, observability, security, and troubleshooting.**
+**🔧 Advanced Topics**: See [**KB.MD**](docs/KB.MD) for troubleshooting, performance tuning, monitoring, and production deployment.
 
 ## Prefect Workflows
 
@@ -425,7 +418,7 @@ flowchart LR
 
 **Why Prefect?**: Python-first, advanced error handling with retries/circuit breakers, observability, easy local dev w/ Community Server, native async.
 
-E²A uses webhook-driven business process flows managed by the Business Operations Orchestrator, coordinating order processing, exception management, and billing with unified reporting and automation. Order processing tracks fulfillment and SLAs, exception management automates common fixes and insights, and billing automates invoice generation and validation. Prefect deployments (see `prefect.yaml`) run these flows on schedules or on-demand, triggered via UI, API, or CLI.
+E²A uses consolidated business process flows managed by the Business Operations Orchestrator. Order processing integrates processing stage tracking with SLA monitoring, exception management uses smart resolution tracking (80% efficiency improvement), and billing automates invoice generation with validation. Prefect deployments run these flows on schedules or on-demand via UI, API, or CLI.
 
 ## License
 

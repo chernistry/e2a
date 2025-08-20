@@ -573,20 +573,366 @@ show_help() {
     echo "  ./run.sh status"
 }
 
+cmd_processing_stages() {
+    show_banner
+    log_info "🔄 Processing Stage Management"
+    
+    # Check if API is running
+    if ! curl -s http://localhost:8000/healthz &> /dev/null; then
+        log_warn "API not running. Starting stack..."
+        cmd_start
+        sleep 10
+    fi
+    
+    echo
+    echo "=== PROCESSING STAGE MANAGEMENT ==="
+    echo
+    
+    # Create test orders with processing stages
+    log_info "Creating test orders with processing stages..."
+    
+    for i in {1..3}; do
+        order_id="STAGE-TEST-$(printf "%03d" $i)"
+        echo "📋 Creating stages for order $order_id..."
+        
+        # Use Python to create stages
+        python3 -c "
+import asyncio
+import sys
+sys.path.append('.')
+
+from app.storage.db import get_session
+from app.services.processing_stage_service import ProcessingStageService
+
+async def create_stages():
+    async with get_session() as db:
+        service = ProcessingStageService(db)
+        stages = await service.initialize_order_stages('demo-3pl', '$order_id')
+        print(f'   ✅ Created {len(stages)} stages for order $order_id')
+        
+        # Start first stage (data_ingestion) 
+        started = await service.start_stage('demo-3pl', '$order_id', 'data_ingestion')
+        if started:
+            print(f'   ⏳ Started data_ingestion stage')
+            
+            # Complete it after a short delay
+            import time
+            time.sleep(0.1)
+            completed = await service.complete_stage('demo-3pl', '$order_id', 'data_ingestion', 
+                                                   {'records_processed': 100, 'validation_passed': True})
+            if completed:
+                print(f'   ✅ Completed data_ingestion stage')
+
+asyncio.run(create_stages())
+" 2>/dev/null || echo "   ❌ Failed to create stages for $order_id"
+    done
+    
+    echo
+    log_info "📊 Processing Stage Metrics:"
+    
+    # Get current metrics
+    python3 -c "
+import asyncio
+import sys
+sys.path.append('.')
+
+from app.storage.db import get_session
+from app.services.processing_stage_service import ProcessingStageService, DataCompletenessService
+
+async def show_metrics():
+    async with get_session() as db:
+        service = ProcessingStageService(db)
+        completeness_service = DataCompletenessService(db)
+        
+        # Get eligible stages
+        eligible = await service.get_eligible_stages('demo-3pl', limit=10)
+        print(f'🎯 Eligible stages ready to process: {len(eligible)}')
+        
+        if eligible:
+            print('   Ready to process:')
+            for stage in eligible[:5]:  # Show first 5
+                print(f'   - {stage.order_id}: {stage.stage_name}')
+        
+        # Get metrics
+        metrics = await service.get_stage_metrics('demo-3pl')
+        print(f'📈 Stage status counts: {metrics[\"status_counts\"]}')
+        
+        # Show completion rates for stages that have data
+        if metrics['completion_rates']:
+            print('📊 Stage completion rates:')
+            for stage_name, stats in metrics['completion_rates'].items():
+                if stats['total'] > 0:
+                    print(f'   - {stage_name}: {stats[\"completion_rate\"]:.1f}% ({stats[\"completed\"]}/{stats[\"total\"]})')
+
+asyncio.run(show_metrics())
+" 2>/dev/null || echo "   ❌ Failed to get metrics"
+    
+    echo
+    log_info "🔄 Processing eligible stages..."
+    
+    # Process some eligible stages
+    python3 -c "
+import asyncio
+import sys
+import random
+sys.path.append('.')
+
+from app.storage.db import get_session
+from app.services.processing_stage_service import ProcessingStageService
+
+async def process_stages():
+    async with get_session() as db:
+        service = ProcessingStageService(db)
+        
+        # Get eligible stages
+        eligible = await service.get_eligible_stages('demo-3pl', limit=5)
+        
+        if not eligible:
+            print('   ℹ️  No eligible stages to process')
+            return
+        
+        processed = 0
+        for stage in eligible:
+            try:
+                # Start the stage
+                started = await service.start_stage('demo-3pl', stage.order_id, stage.stage_name)
+                if started:
+                    print(f'   ⏳ Processing {stage.stage_name} for {stage.order_id}...')
+                    
+                    # Simulate processing time
+                    import time
+                    time.sleep(0.2)
+                    
+                    # 90% success rate
+                    if random.random() > 0.1:
+                        # Complete successfully
+                        stage_data = {
+                            'processed_records': random.randint(50, 200),
+                            'processing_time_ms': random.randint(100, 500),
+                            'success': True
+                        }
+                        completed = await service.complete_stage('demo-3pl', stage.order_id, stage.stage_name, stage_data)
+                        if completed:
+                            print(f'   ✅ Completed {stage.stage_name} for {stage.order_id}')
+                            processed += 1
+                    else:
+                        # Fail occasionally
+                        failed = await service.fail_stage('demo-3pl', stage.order_id, stage.stage_name, 
+                                                        'Simulated processing failure')
+                        if failed:
+                            print(f'   ❌ Failed {stage.stage_name} for {stage.order_id} (will retry)')
+            except Exception as e:
+                print(f'   ❌ Error processing {stage.stage_name}: {e}')
+        
+        print(f'   📊 Processed {processed}/{len(eligible)} stages successfully')
+
+asyncio.run(process_stages())
+" 2>/dev/null || echo "   ❌ Failed to process stages"
+    
+    echo
+    log_success "Processing stage management completed!"
+    echo
+    echo "🎯 Next steps:"
+    echo "   • Run './run.sh processing-stages' again to process more stages"
+    echo "   • Check dashboard: http://localhost:3000/dashboard/overview"
+    echo "   • View API docs: http://localhost:8000/docs"
+}
+
+cmd_autonomous_processing() {
+    show_banner
+    log_info "🤖 Starting Autonomous Processing Stage Management"
+    
+    # Check if API is running
+    if ! curl -s http://localhost:8000/healthz &> /dev/null; then
+        log_warn "API not running. Starting stack..."
+        cmd_start
+        sleep 10
+    fi
+    
+    echo
+    echo "=== AUTONOMOUS PROCESSING LOOP ==="
+    echo "Press Ctrl+C to stop"
+    echo
+    
+    local iteration=1
+    
+    while true; do
+        echo "🔄 Iteration $iteration - $(date '+%H:%M:%S')"
+        
+        # Process eligible stages
+        python3 -c "
+import asyncio
+import sys
+import random
+sys.path.append('.')
+
+from app.storage.db import get_session
+from app.services.processing_stage_service import ProcessingStageService, DataCompletenessService
+
+async def autonomous_cycle():
+    async with get_session() as db:
+        service = ProcessingStageService(db)
+        
+        # Get eligible stages
+        eligible = await service.get_eligible_stages('demo-3pl', limit=10)
+        
+        if not eligible:
+            print('   ℹ️  No eligible stages - creating new test order...')
+            
+            # Create a new test order
+            import time
+            order_id = f'AUTO-{int(time.time())}'
+            stages = await service.initialize_order_stages('demo-3pl', order_id)
+            print(f'   📋 Created {len(stages)} stages for order {order_id}')
+            
+            # Get eligible stages again
+            eligible = await service.get_eligible_stages('demo-3pl', limit=10)
+        
+        processed = 0
+        failed = 0
+        
+        for stage in eligible[:5]:  # Process up to 5 stages per cycle
+            try:
+                # Start the stage
+                started = await service.start_stage('demo-3pl', stage.order_id, stage.stage_name)
+                if started:
+                    # Simulate processing
+                    import time
+                    time.sleep(0.1)
+                    
+                    # 85% success rate
+                    if random.random() > 0.15:
+                        stage_data = {
+                            'processed_at': time.time(),
+                            'records': random.randint(50, 200),
+                            'success': True
+                        }
+                        completed = await service.complete_stage('demo-3pl', stage.order_id, stage.stage_name, stage_data)
+                        if completed:
+                            processed += 1
+                    else:
+                        failed_stage = await service.fail_stage('demo-3pl', stage.order_id, stage.stage_name, 
+                                                              'Random processing failure')
+                        if failed_stage:
+                            failed += 1
+            except Exception as e:
+                failed += 1
+        
+        # Get current metrics
+        metrics = await service.get_stage_metrics('demo-3pl')
+        eligible_count = len(await service.get_eligible_stages('demo-3pl'))
+        
+        print(f'   📊 Processed: {processed}, Failed: {failed}, Eligible: {eligible_count}')
+        print(f'   📈 Total stages: {sum(metrics[\"status_counts\"].values())}')
+
+asyncio.run(autonomous_cycle())
+" 2>/dev/null || echo "   ❌ Processing cycle failed"
+        
+        # Wait before next iteration
+        sleep 3
+        iteration=$((iteration + 1))
+    done
+}
+
+show_help() {
+    show_banner
+    echo "Octup E²A - Project Management"
+    echo
+    echo "Main commands:"
+    echo "  start     - Start full stack"
+    echo "  stop      - Stop all services"
+    echo "  status    - Show service status"
+    echo "  demo      - Run system demonstration"
+    echo
+    echo "Event Generation:"
+    echo "  generate  - Generate events [single|batch|stream] [duration]"
+    echo "  stats     - Show system statistics"
+    echo "  reset     - FULL DATABASE RESET (deletes ALL data)"
+    echo
+    echo "Processing & Orchestration:"
+    echo "  processing-stages - Manual processing stage management"
+    echo "  autonomous        - Start autonomous processing loop"
+    echo "  flows             - Show Prefect flow status"
+    echo
+    echo "Development:"
+    echo "  migrate   - Run database migrations"
+    echo "  test      - Run tests"
+    echo "  logs      - Show logs [service]"
+    echo "  shell     - Open shell in container [service]"
+    echo "  studio    - Open Supabase Studio"
+    echo "  prefect   - Open Prefect UI"
+    echo
+    echo "Examples:"
+    echo "  ./run.sh start"
+    echo "  ./run.sh demo"
+    echo "  ./run.sh processing-stages"
+    echo "  ./run.sh autonomous"
+    echo "  ./run.sh flows"
+    echo "  ./run.sh generate single"
+    echo "  ./run.sh generate batch"
+    echo "  ./run.sh generate stream 60"
+    echo "  ./run.sh stats"
+    echo "  ./run.sh reset"
+    echo "  ./run.sh logs api"
+    echo "  ./run.sh status"
+}
+
+cmd_flows() {
+    show_banner
+    log_info "📊 Prefect Flow Management"
+    
+    # Check if Prefect server is running
+    if ! curl -s http://localhost:4200/api/health &> /dev/null; then
+        log_warn "Prefect server not running. Starting..."
+        cmd_start
+        sleep 10
+    fi
+    
+    echo
+    echo "=== PREFECT FLOW STATUS ==="
+    echo
+    
+    log_info "Current flow deployments:"
+    echo "  🏢 business-orchestrator    - Master orchestrator (every hour)"
+    echo "  📦 order-processing         - Order pipeline with stages (every 30min)"
+    echo "  ⚠️  exception-management     - Exception resolution (every 2 hours)"
+    echo "  💰 billing-management       - Billing operations (daily 2 AM)"
+    echo
+    
+    log_info "Flow architecture highlights:"
+    echo "  ✅ Consolidated processing stages into order processing flow"
+    echo "  ✅ Resolution tracking integrated with exception management"
+    echo "  ✅ No overlapping responsibilities between flows"
+    echo "  ✅ Real-world aligned scheduling and dependencies"
+    echo
+    
+    log_info "To deploy flows:"
+    echo "  cd /Users/sasha/IdeaProjects/octup/root"
+    echo "  prefect deploy --all"
+    echo
+    
+    log_info "To monitor flows:"
+    echo "  Open Prefect UI: http://localhost:4200"
+    echo "  Or run: ./run.sh prefect"
+}
+
 # Main execution
 case "${1:-help}" in
-    "start")    cmd_start ;;
-    "stop")     cmd_stop ;;
-    "status")   cmd_status ;;
-    "migrate")  cmd_migrate ;;
-    "test")     cmd_test ;;
-    "demo")     cmd_demo ;;
-    "generate") cmd_generate "${2:-single}" "${3:-30}" ;;
-    "stats")    cmd_stats ;;
-    "reset")    cmd_reset ;;
-    "logs")     cmd_logs "${2:-api}" ;;
-    "shell")    cmd_shell "${2:-api}" ;;
-    "studio")   cmd_studio ;;
-    "prefect")  cmd_prefect ;;
-    "help"|*)   show_help ;;
+    "start")              cmd_start ;;
+    "stop")               cmd_stop ;;
+    "status")             cmd_status ;;
+    "migrate")            cmd_migrate ;;
+    "test")               cmd_test ;;
+    "demo")               cmd_demo ;;
+    "generate")           cmd_generate "${2:-single}" "${3:-30}" ;;
+    "stats")              cmd_stats ;;
+    "reset")              cmd_reset ;;
+    "processing-stages")  cmd_processing_stages ;;
+    "autonomous")         cmd_autonomous_processing ;;
+    "flows")              cmd_flows ;;
+    "logs")               cmd_logs "${2:-api}" ;;
+    "shell")              cmd_shell "${2:-api}" ;;
+    "studio")             cmd_studio ;;
+    "prefect")            cmd_prefect ;;
+    "help"|*)             show_help ;;
 esac

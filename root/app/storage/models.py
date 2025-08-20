@@ -292,3 +292,99 @@ class DLQ(Base):
         Index("ix_dlq_tenant_created", "tenant", "created_at"),
         Index("ix_dlq_next_retry", "next_retry_at"),
     )
+
+
+class OrderProcessingStage(Base):
+    """Order processing stage tracking for data completeness verification."""
+    
+    __tablename__ = "order_processing_stages"
+    
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    tenant: Mapped[str] = mapped_column(String(64), ForeignKey("tenants.name"), nullable=False, index=True)
+    order_id: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    stage_name: Mapped[str] = mapped_column(String(64), nullable=False)
+    stage_status: Mapped[str] = mapped_column(String(16), default="PENDING", nullable=False)
+    
+    # Timing fields
+    started_at: Mapped[dt.datetime] = mapped_column(DateTime, nullable=True)
+    completed_at: Mapped[dt.datetime] = mapped_column(DateTime, nullable=True)
+    failed_at: Mapped[dt.datetime] = mapped_column(DateTime, nullable=True)
+    
+    # Retry tracking
+    retry_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    max_retries: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
+    error_message: Mapped[str] = mapped_column(Text, nullable=True)
+    
+    # Stage data and dependencies
+    stage_data: Mapped[Dict[str, Any]] = mapped_column(JSON, nullable=True)
+    dependencies_met: Mapped[bool] = mapped_column(default=False, nullable=False)
+    
+    # Audit fields
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime,
+        default=dt.datetime.utcnow,
+        nullable=False
+    )
+    updated_at: Mapped[dt.datetime] = mapped_column(
+        DateTime,
+        default=dt.datetime.utcnow,
+        onupdate=dt.datetime.utcnow,
+        nullable=False
+    )
+    
+    # Constraints and indexes
+    __table_args__ = (
+        UniqueConstraint("tenant", "order_id", "stage_name", name="uq_processing_stage"),
+        Index("ix_processing_stages_tenant_order", "tenant", "order_id"),
+        Index("ix_processing_stages_status", "tenant", "stage_name", "stage_status"),
+        Index("ix_processing_stages_eligible", "tenant", "stage_status", "dependencies_met"),
+    )
+    
+    @property
+    def is_eligible_to_run(self) -> bool:
+        """Check if stage is eligible to run (dependencies met and not completed)."""
+        return (
+            self.dependencies_met and
+            self.stage_status in ['PENDING'] and
+            self.retry_count < self.max_retries
+        )
+    
+    @property
+    def duration_seconds(self) -> Optional[int]:
+        """Get stage duration in seconds if completed."""
+        if self.started_at and self.completed_at:
+            return int((self.completed_at - self.started_at).total_seconds())
+        return None
+
+
+class DataCompletenessCheck(Base):
+    """Data completeness validation tracking."""
+    
+    __tablename__ = "data_completeness_checks"
+    
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    tenant: Mapped[str] = mapped_column(String(64), ForeignKey("tenants.name"), nullable=False, index=True)
+    order_id: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    check_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    check_status: Mapped[str] = mapped_column(String(16), default="PENDING", nullable=False)
+    check_result: Mapped[Dict[str, Any]] = mapped_column(JSON, nullable=True)
+    checked_at: Mapped[dt.datetime] = mapped_column(DateTime, nullable=True)
+    
+    # Audit fields
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime,
+        default=dt.datetime.utcnow,
+        nullable=False
+    )
+    
+    # Constraints and indexes
+    __table_args__ = (
+        UniqueConstraint("tenant", "order_id", "check_type", name="uq_completeness_check"),
+        Index("ix_completeness_checks_tenant_order", "tenant", "order_id"),
+        Index("ix_completeness_checks_status", "tenant", "check_type", "check_status"),
+    )
+    
+    @property
+    def validation_passed(self) -> bool:
+        """Check if validation passed."""
+        return self.check_status == "PASSED"
