@@ -305,6 +305,73 @@ class AIClient:
                 span.set_attribute("error", str(e))
                 raise
 
+    @ai_resilient("analyze_order_problems")
+    async def analyze_order_problems(
+        self,
+        context: Dict[str, Any],
+        prompt_template: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Analyze order problems using AI.
+        
+        Performs AI-powered analysis of raw order data to detect potential problems
+        that could cause fulfillment issues, replacing hardcoded pattern matching
+        with intelligent analysis of addresses, payments, inventory, and order structure.
+        
+        Args:
+            context (Dict[str, Any]): Raw order data and analysis context
+            prompt_template (Optional[str]): Custom prompt template override
+            
+        Returns:
+            Dict[str, Any]: Problem analysis with detected issues and recommendations
+            
+        Raises:
+            RuntimeError: If AI is disabled or quota exceeded
+            CircuitBreakerError: When AI service circuit breaker is open
+        """
+        if not self.api_key or settings.AI_PROVIDER_BASE_URL == "disabled":
+            raise RuntimeError("AI provider disabled")
+        
+        if self.daily_tokens_used >= self.max_daily_tokens:
+            raise RuntimeError("Daily token quota exceeded")
+        
+        with tracer.start_as_current_span("ai_analyze_order_problems") as span:
+            span.set_attribute("provider", self.provider)
+            span.set_attribute("model", self.model)
+            
+            start_time = time.time()
+            
+            try:
+                prompt = self._build_order_analysis_prompt(context, prompt_template)
+                raw_result = await self._make_request(prompt, "order_analysis")
+                
+                # Parse JSON response
+                parsed_result = self._parse_order_analysis_response(raw_result)
+                
+                processing_time = time.time() - start_time
+                
+                span.set_attribute("processing_time_ms", int(processing_time * 1000))
+                span.set_attribute("has_problems", parsed_result.get("has_problems", False))
+                span.set_attribute("confidence", parsed_result.get("confidence", 0.0))
+                span.set_attribute("problems_count", len(parsed_result.get("problems", [])))
+                
+                ai_requests_total.labels(
+                    provider=self.provider,
+                    model=self.model_label,
+                    operation="order_analysis"
+                ).inc()
+                
+                return parsed_result
+                
+            except Exception as e:
+                ai_failures_total.labels(
+                    provider=self.provider,
+                    error_type=type(e).__name__.replace(".", "_").replace(" ", "_")
+                ).inc()
+                
+                span.set_attribute("error", str(e))
+                raise
+
 
     async def get_generation_stats(self, generation_id: str) -> Optional[Dict[str, Any]]:
         """
@@ -748,6 +815,288 @@ Analyze if this can be automatically resolved and provide JSON response:
                 "reasoning": f"AI response parsing failed: {str(e)}",
                 "risk_assessment": "High - parsing error",
                 "estimated_resolution_time": "unknown"
+            }
+
+    def _build_order_analysis_prompt(
+        self,
+        context: Dict[str, Any],
+        template: Optional[str] = None
+    ) -> str:
+        """
+        Build order problem analysis prompt from context.
+        
+        Args:
+            context (Dict[str, Any]): Order data and analysis context
+            template (Optional[str]): Custom prompt template override
+            
+        Returns:
+            str: Formatted prompt for order problem analysis
+        """
+        try:
+            prompt_loader = get_prompt_loader()
+            
+            if template:
+                # Use custom template if provided
+                return template.format(**context)
+            else:
+                # Use external prompt template
+                return prompt_loader.render_prompt("order_problem_detection", **context)
+                
+        except (FileNotFoundError, KeyError):
+            # Fallback to inline prompt if external file fails
+            return f"""
+You are an expert logistics order validation analyst. Analyze RAW ORDER DATA to detect potential problems that could cause fulfillment issues.
+
+**CRITICAL: Analyze raw data to identify real problems. Do NOT rely on pre-processed hints or obvious test patterns.**
+
+Order Data: {context.get('order_data', {})}
+Analysis Timestamp: {context.get('analysis_timestamp', 'unknown')}
+
+Detect problems in:
+- ADDRESS: Invalid formats, undeliverable locations, geographic issues
+- PAYMENT: Suspicious patterns, method restrictions, incomplete info
+- INVENTORY: Discontinued items, quantity limits, compatibility issues
+- ORDER: Missing fields, format inconsistencies, business rule violations
+- DELIVERY: Serviceability issues, time conflicts, special requirements
+
+Return JSON:
+{{
+    "has_problems": boolean,
+    "confidence": 0.0-1.0,
+    "problems": [
+        {{
+            "type": "ADDRESS_INVALID|PAYMENT_SUSPICIOUS|INVENTORY_ISSUE|ORDER_INVALID|DELIVERY_PROBLEM",
+            "field": "specific_field_name",
+            "reason": "specific problem description with evidence",
+            "severity": "LOW|MEDIUM|HIGH|CRITICAL",
+            "impact": "brief description of fulfillment impact"
+        }}
+    ],
+    "reasoning": "step-by-step analysis referencing specific data points",
+    "recommendations": ["specific actionable steps"],
+    "risk_assessment": {{
+        "fulfillment_risk": "LOW|MEDIUM|HIGH|CRITICAL",
+        "customer_impact": "LOW|MEDIUM|HIGH|CRITICAL",
+        "business_impact": "LOW|MEDIUM|HIGH|CRITICAL"
+    }}
+}}
+
+Focus on REAL problems that would impact fulfillment, not obvious test patterns.
+"""
+
+    def _parse_order_analysis_response(self, response) -> Dict[str, Any]:
+        """
+        Parse order problem analysis response from AI service.
+        
+        Args:
+            response: Raw AI response (string or dict)
+            
+        Returns:
+            Dict[str, Any]: Parsed and validated analysis result
+            
+        Raises:
+            ValueError: If response parsing fails (caller should handle by setting AI fields to NULL)
+        """
+        import json
+        
+        try:
+            # If it's already a dict, use it directly
+            if isinstance(response, dict):
+                parsed = response
+            else:
+                # If it's a string, try to parse as JSON
+                parsed = json.loads(response)
+            
+            # Validate required fields
+            required_fields = ["has_problems", "confidence", "problems", "reasoning"]
+            for field in required_fields:
+                if field not in parsed:
+                    raise ValueError(f"Missing required field: {field}")
+            
+            # Ensure proper types
+            parsed["has_problems"] = bool(parsed["has_problems"])
+            parsed["confidence"] = float(parsed["confidence"])
+            
+            # Validate confidence range
+            if not 0.0 <= parsed["confidence"] <= 1.0:
+                raise ValueError(f"Invalid confidence score: {parsed['confidence']}")
+            
+            if not isinstance(parsed["problems"], list):
+                parsed["problems"] = []
+            
+            # Validate problems structure
+            for problem in parsed["problems"]:
+                if not isinstance(problem, dict):
+                    raise ValueError("Each problem must be a dictionary")
+                
+                # Ensure required problem fields
+                problem_fields = ["type", "field", "reason", "severity"]
+                for field in problem_fields:
+                    if field not in problem:
+                        raise ValueError(f"Problem missing required field: {field}")
+                
+                # Validate severity
+                valid_severities = ["LOW", "MEDIUM", "HIGH", "CRITICAL"]
+                if problem["severity"] not in valid_severities:
+                    raise ValueError(f"Invalid severity: {problem['severity']}")
+            
+            # Add default recommendations if missing
+            if "recommendations" not in parsed:
+                parsed["recommendations"] = ["Review order data manually"]
+            
+            # Add default risk assessment if missing
+            if "risk_assessment" not in parsed:
+                parsed["risk_assessment"] = {
+                    "fulfillment_risk": "MEDIUM",
+                    "customer_impact": "MEDIUM", 
+                    "business_impact": "MEDIUM"
+                }
+            
+            return parsed
+            
+        except (json.JSONDecodeError, TypeError, ValueError, KeyError) as e:
+            # Re-raise to let caller handle by setting AI fields to NULL
+            # This follows the established pattern: ai_confidence = None for reprocessing
+            raise ValueError(f"AI response parsing failed: {str(e)}")
+
+    def _build_order_analysis_prompt(
+        self,
+        context: Dict[str, Any],
+        template: Optional[str] = None
+    ) -> str:
+        """
+        Build order problem analysis prompt from context.
+        
+        Args:
+            context (Dict[str, Any]): Order data and analysis context
+            template (Optional[str]): Custom prompt template override
+            
+        Returns:
+            str: Formatted prompt for order problem analysis
+        """
+        try:
+            prompt_loader = get_prompt_loader()
+            
+            if template:
+                # Use custom template if provided
+                return template.format(**context)
+            else:
+                # Use external prompt template
+                return prompt_loader.render_prompt("order_problem_detection", **context)
+                
+        except (FileNotFoundError, KeyError):
+            # Fallback to inline prompt if external file fails
+            return f"""
+You are an expert logistics order validation analyst. Analyze RAW ORDER DATA to detect potential problems that could cause fulfillment issues.
+
+**CRITICAL: Analyze raw data to identify real problems. Do NOT rely on pre-processed hints or obvious test patterns.**
+
+Order Data: {context.get('order_data', {})}
+Analysis Timestamp: {context.get('analysis_timestamp', 'unknown')}
+
+Detect problems in:
+- ADDRESS: Invalid formats, undeliverable locations, geographic issues
+- PAYMENT: Suspicious patterns, method restrictions, incomplete info
+- INVENTORY: Discontinued items, quantity limits, compatibility issues
+- ORDER: Missing fields, format inconsistencies, business rule violations
+- DELIVERY: Serviceability issues, time conflicts, special requirements
+
+Return JSON:
+{{
+    "has_problems": boolean,
+    "confidence": 0.0-1.0,
+    "problems": [
+        {{
+            "type": "ADDRESS_INVALID|PAYMENT_SUSPICIOUS|INVENTORY_ISSUE|ORDER_INVALID|DELIVERY_PROBLEM",
+            "field": "specific_field_name",
+            "reason": "specific problem description with evidence",
+            "severity": "LOW|MEDIUM|HIGH|CRITICAL",
+            "impact": "brief description of fulfillment impact"
+        }}
+    ],
+    "reasoning": "step-by-step analysis referencing specific data points",
+    "recommendations": ["specific actionable steps"],
+    "risk_assessment": {{
+        "fulfillment_risk": "LOW|MEDIUM|HIGH|CRITICAL",
+        "customer_impact": "LOW|MEDIUM|HIGH|CRITICAL",
+        "business_impact": "LOW|MEDIUM|HIGH|CRITICAL"
+    }}
+}}
+
+Focus on REAL problems that would impact fulfillment, not obvious test patterns.
+"""
+
+    def _parse_order_analysis_response(self, response) -> Dict[str, Any]:
+        """
+        Parse order problem analysis response from AI service.
+        
+        Args:
+            response: Raw AI response (string or dict)
+            
+        Returns:
+            Dict[str, Any]: Parsed and validated analysis result
+        """
+        import json
+        
+        try:
+            # If it's already a dict, use it directly
+            if isinstance(response, dict):
+                parsed = response
+            else:
+                # If it's a string, try to parse as JSON
+                parsed = json.loads(response)
+            
+            # Validate required fields
+            required_fields = ["has_problems", "confidence", "problems", "reasoning"]
+            for field in required_fields:
+                if field not in parsed:
+                    raise ValueError(f"Missing required field: {field}")
+            
+            # Ensure proper types
+            parsed["has_problems"] = bool(parsed["has_problems"])
+            parsed["confidence"] = float(parsed["confidence"])
+            
+            if not isinstance(parsed["problems"], list):
+                parsed["problems"] = []
+            
+            # Validate problems structure
+            for problem in parsed["problems"]:
+                if not isinstance(problem, dict):
+                    continue
+                
+                # Ensure required problem fields
+                problem_fields = ["type", "field", "reason", "severity"]
+                for field in problem_fields:
+                    if field not in problem:
+                        problem[field] = "unknown"
+            
+            # Add default recommendations if missing
+            if "recommendations" not in parsed:
+                parsed["recommendations"] = ["Review order data manually"]
+            
+            # Add default risk assessment if missing
+            if "risk_assessment" not in parsed:
+                parsed["risk_assessment"] = {
+                    "fulfillment_risk": "MEDIUM",
+                    "customer_impact": "MEDIUM", 
+                    "business_impact": "MEDIUM"
+                }
+            
+            return parsed
+            
+        except (json.JSONDecodeError, TypeError, ValueError) as e:
+            # Return a default response if parsing fails
+            return {
+                "has_problems": False,
+                "confidence": 0.0,
+                "problems": [],
+                "reasoning": f"AI response parsing failed: {str(e)}",
+                "recommendations": ["Review order data manually", "Check AI service logs"],
+                "risk_assessment": {
+                    "fulfillment_risk": "LOW",
+                    "customer_impact": "LOW",
+                    "business_impact": "LOW"
+                }
             }
 
 

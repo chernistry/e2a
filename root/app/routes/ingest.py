@@ -150,7 +150,7 @@ async def ingest_events_raw(
                 try:
                     from app.services.order_analyzer import get_order_analyzer
                     analyzer = get_order_analyzer()
-                    problems = analyzer.analyze_order(event_data)
+                    problems = await analyzer.analyze_order(event_data)
                     
                     # Create exceptions for detected problems
                     for problem in problems:

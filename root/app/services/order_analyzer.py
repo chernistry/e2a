@@ -4,34 +4,133 @@
 Order analyzer for detecting problems in order data.
 
 This module analyzes incoming order data to detect potential issues
-that should trigger exceptions, such as invalid addresses, payment problems,
-inventory shortages, and delivery delays.
+that should trigger exceptions. Now powered by AI for intelligent
+problem detection, with rule-based fallback for reliability.
 """
 
 from datetime import datetime
 from typing import Dict, Any, Optional, List
 
 from app.observability.tracing import get_tracer
+from app.observability.logging import ContextualLogger
+from app.services.ai_order_analyzer import get_ai_order_analyzer
 
 
 tracer = get_tracer(__name__)
+logger = ContextualLogger(__name__)
 
 
 class OrderAnalyzer:
     """
     Analyzer for detecting problems in order data.
     
-    Examines order content, customer information, and delivery details
-    to identify issues that should trigger exception creation.
+    Uses AI-powered analysis to examine order content, customer information,
+    and delivery details to identify issues that should trigger exception creation.
+    Falls back to rule-based analysis when AI is unavailable.
     """
     
     def __init__(self):
         """Initialize the order analyzer."""
-        pass
+        self.ai_analyzer = get_ai_order_analyzer()
     
-    def analyze_order(self, order_data: Dict[str, Any]) -> List[Dict[str, Any]]:
+    async def analyze_order(self, order_data: Dict[str, Any]) -> List[Dict[str, Any]]:
         """
-        Analyze order data for potential problems.
+        Analyze order data for potential problems using AI.
+        
+        Args:
+            order_data (Dict[str, Any]): Order data from webhook
+            
+        Returns:
+            List[Dict[str, Any]]: List of detected problems
+        """
+        problems = []
+        
+        # Extract order details (handle both webhook and direct order formats)
+        order = order_data.get("data", {}).get("order", order_data)
+        if not order:
+            return problems
+        
+        try:
+            # AI-powered analysis (primary method)
+            ai_result = await self.ai_analyzer.analyze_order_problems(order_data)
+            
+            # Check if AI analysis succeeded
+            if (ai_result.get("has_problems") is not None and 
+                ai_result.get("confidence") is not None and 
+                ai_result.get("confidence") >= 0.7):
+                
+                # Convert AI problems to exception format
+                if ai_result.get("has_problems"):
+                    for problem in ai_result.get("problems", []):
+                        exception_problem = self._convert_ai_problem_to_exception(problem, order, ai_result)
+                        problems.append(exception_problem)
+                
+                logger.info(
+                    f"AI order analysis completed successfully",
+                    extra={
+                        "order_id": order.get("id"),
+                        "has_problems": ai_result.get("has_problems"),
+                        "confidence": ai_result.get("confidence"),
+                        "problems_count": len(problems)
+                    }
+                )
+                
+                return problems
+            
+            # AI analysis failed or low confidence - use fallback
+            logger.warning(
+                f"AI analysis failed or low confidence, using fallback",
+                extra={
+                    "order_id": order.get("id"),
+                    "ai_confidence": ai_result.get("confidence"),
+                    "ai_error": ai_result.get("error")
+                }
+            )
+            
+        except Exception as e:
+            logger.error(f"AI order analysis error: {e}, using fallback")
+        
+        # Fallback to rule-based analysis
+        return await self._legacy_analyze_order(order_data)
+    
+    def _convert_ai_problem_to_exception(
+        self, 
+        ai_problem: Dict[str, Any], 
+        order: Dict[str, Any],
+        ai_result: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        Convert AI problem to exception record format.
+        
+        Args:
+            ai_problem (Dict[str, Any]): AI-detected problem
+            order (Dict[str, Any]): Order data
+            ai_result (Dict[str, Any]): Complete AI analysis result
+            
+        Returns:
+            Dict[str, Any]: Exception record format
+        """
+        return {
+            "reason_code": ai_problem["type"],
+            "severity": ai_problem["severity"],
+            "description": ai_problem["reason"],
+            "context": {
+                "ai_analysis": True,
+                "ai_confidence": ai_result.get("confidence"),
+                "field": ai_problem["field"],
+                "impact": ai_problem.get("impact"),
+                "recommendations": ai_result.get("recommendations", []),
+                "risk_assessment": ai_result.get("risk_assessment", {}),
+                "analysis_method": "ai_powered"
+            }
+        }
+    
+    async def _legacy_analyze_order(self, order_data: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """
+        Legacy rule-based analysis (fallback only).
+        
+        Maintains existing hardcoded checks as fallback when AI is unavailable.
+        This is the embarrassing code we're replacing with AI.
         
         Args:
             order_data (Dict[str, Any]): Order data from webhook
@@ -42,7 +141,7 @@ class OrderAnalyzer:
         problems = []
         
         # Extract order details
-        order = order_data.get("data", {}).get("order", {})
+        order = order_data.get("data", {}).get("order", order_data)
         if not order:
             return problems
         
@@ -56,7 +155,7 @@ class OrderAnalyzer:
         if payment_problem:
             problems.append(payment_problem)
         
-        # Check for address problems
+        # Check for address problems (embarrassing hardcoded checks)
         address_problem = self._check_address_issues(order)
         if address_problem:
             problems.append(address_problem)

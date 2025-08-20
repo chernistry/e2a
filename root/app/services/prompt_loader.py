@@ -202,6 +202,23 @@ class PromptLoader:
         """
         return self.render_prompt("automated_resolution", **kwargs)
     
+    def get_order_problem_detection_prompt(self, **kwargs: Any) -> str:
+        """
+        Get rendered order problem detection prompt.
+        
+        Renders the order problem detection prompt template with provided context
+        for AI-powered analysis of order data to detect potential issues.
+        
+        Args:
+            **kwargs: Context variables for prompt rendering including:
+                - order_data: Complete raw order data (without preprocessing)
+                - analysis_timestamp: Timestamp of analysis
+                
+        Returns:
+            str: Rendered prompt for order problem detection analysis
+        """
+        return self.render_prompt("order_problem_detection", **kwargs)
+    
     # ==== TEMPLATE MANAGEMENT ==== #
     
     def list_available_prompts(self) -> list[str]:
