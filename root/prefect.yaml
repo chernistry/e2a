@@ -1,33 +1,17 @@
-# Prefect deployment configuration for Octup E²A
-name: octup-e2a-flows
+# Prefect deployment configuration for Octup orchestration flows
+name: octup-flows
 prefect-version: 3.0.0
 
-# Build configuration
+# Docker environment - code mounted via volumes
 build: null
-
-# Push configuration  
 push: null
+pull: null
 
-# Pull configuration
-pull:
-  - prefect.deployments.steps.set_working_directory:
-      directory: /Users/sasha/IdeaProjects/octup/root
-
-# Deployments - Simplified and logical separation
+# Business process deployments
 deployments:
-  # Core business orchestrator - runs all business processes in sequence
-  - name: business-orchestrator
-    entrypoint: flows/business_operations_orchestrator.py:business_operations_orchestrator
-    parameters:
-      tenant: demo-3pl
-    schedule:
-      interval: 3600  # Every hour
-    work_pool:
-      name: default-agent-pool
-      
-  # Order processing pipeline - handles order lifecycle and processing stages
+  # Order processing pipeline
   - name: order-processing
-    entrypoint: flows/order_processing_flow.py:order_processing_pipeline
+    entrypoint: /app/flows/order_processing_flow.py:order_processing_pipeline
     parameters:
       tenant: demo-3pl
       lookback_hours: 24
@@ -36,33 +20,51 @@ deployments:
       interval: 1800  # Every 30 minutes
     work_pool:
       name: default-agent-pool
-      
-  # Exception management - handles exception analysis and resolution
-  - name: exception-management
-    entrypoint: flows/exception_management_flow.py:exception_management_pipeline
+      job_variables:
+        working_dir: /app
+        env:
+          PYTHONPATH: /app
+
+  # Business orchestrator pipeline
+  - name: business-orchestrator
+    entrypoint: /app/flows/business_operations_orchestrator.py:business_operations_orchestrator
     parameters:
       tenant: demo-3pl
-      analysis_hours: 168
-      enable_automated_resolution: true
     schedule:
-      interval: 7200  # Every 2 hours
+      interval: 3600  # Every hour
     work_pool:
       name: default-agent-pool
-      
-  # Billing management - handles invoicing and billing validation
+      job_variables:
+        working_dir: /app
+        env:
+          PYTHONPATH: /app
+
+  # Exception management pipeline
+  - name: exception-management
+    entrypoint: /app/flows/exception_management_flow.py:exception_management_pipeline
+    parameters:
+      tenant: demo-3pl
+      analysis_hours: 168  # 1 week for pattern analysis
+    schedule:
+      interval: 14400  # Every 4 hours
+    work_pool:
+      name: default-agent-pool
+      job_variables:
+        working_dir: /app
+        env:
+          PYTHONPATH: /app
+
+  # Billing management pipeline
   - name: billing-management
-    entrypoint: flows/billing_management_flow.py:billing_management_pipeline
+    entrypoint: /app/flows/billing_management_flow.py:billing_management_pipeline
     parameters:
       tenant: demo-3pl
       lookback_hours: 24
     schedule:
-      cron: "0 2 * * *"  # Daily at 2 AM
+      interval: 86400  # Daily
     work_pool:
       name: default-agent-pool
-
-# Work pools configuration
-work_pools:
-  - name: default-agent-pool
-    type: process
-    config:
-      command: "python -m prefect.engine"
+      job_variables:
+        working_dir: /app
+        env:
+          PYTHONPATH: /app
