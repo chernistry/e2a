@@ -8,12 +8,14 @@ breach detection, exception creation, and AI-powered analysis integration
 for logistics operations.
 """
 
+import asyncio
 import datetime as dt
+import json
 import os
 from datetime import timezone
 from typing import Dict, List, Optional
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.storage.models import OrderEvent, ExceptionRecord
@@ -31,6 +33,48 @@ from app.observability.metrics import (
 
 
 tracer = get_tracer(__name__)
+
+
+# ==== BACKGROUND PROCESSING ==== #
+
+
+async def process_exception_background(exception_id: int, tenant: str) -> None:
+    """
+    Process exception in background after creation.
+    
+    Triggers Prefect flow execution for comprehensive exception management
+    without blocking the HTTP response.
+    
+    Args:
+        exception_id (int): Exception ID to process
+        tenant (str): Tenant identifier
+    """
+    try:
+        from flows.exception_management_flow import exception_management_pipeline
+        from app.storage.db import get_session
+        
+        print(f"🔄 Background processing for exception {exception_id}")
+        
+        # Run the exception management flow
+        flow_result = await exception_management_pipeline(tenant=tenant)
+        
+        # Update exception with processing results (with proper JSON handling)
+        async with get_session() as db:
+            # Convert flow result to JSON string to avoid type issues
+            flow_result_json = json.dumps(str(flow_result)[:500])  # Truncate to avoid size issues
+            
+            await db.execute(text("""
+                UPDATE exceptions 
+                SET context_data = COALESCE(context_data, '{}')::jsonb || 
+                                 jsonb_build_object('flow_processed', true, 'flow_result', :flow_result::text)
+                WHERE id = :exception_id
+            """), {"exception_id": exception_id, "flow_result": flow_result_json})
+            await db.commit()
+            
+        print(f"✅ Exception {exception_id} processed by flow")
+        
+    except Exception as e:
+        print(f"❌ Background processing failed for exception {exception_id}: {e}")
 
 
 # ==== SLA ENGINE CLASS ==== #
@@ -664,6 +708,9 @@ class SLAEngine:
         except Exception as e:
             # Log the error but don't fail the exception creation
             print(f"Warning: AI analysis failed for exception {exception.id}: {e}")
+        
+        # Trigger background processing (NON-BLOCKING)
+        asyncio.create_task(process_exception_background(exception.id, tenant))
         
         # Update active exceptions metric
         active_exceptions.labels(

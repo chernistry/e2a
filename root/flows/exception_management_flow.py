@@ -169,6 +169,7 @@ async def prioritize_active_exceptions(
     - Time sensitivity (SLA deadlines)
     - Business criticality (revenue at risk)
     - Resolution complexity
+    - Resolution attempt history (NEW)
     
     Args:
         tenant: Tenant to prioritize exceptions for
@@ -180,25 +181,49 @@ async def prioritize_active_exceptions(
     logger.info(f"Prioritizing active exceptions for tenant {tenant}")
     
     async with get_session() as db:
-        # Get all active exceptions
+        # Get all active exceptions that are eligible for resolution
         query = select(ExceptionRecord).where(
             and_(
                 ExceptionRecord.tenant == tenant,
-                ExceptionRecord.status.in_(['OPEN', 'IN_PROGRESS'])
+                ExceptionRecord.status.in_(['OPEN', 'IN_PROGRESS']),
+                # NEW: Only include resolution-eligible exceptions
+                ExceptionRecord.resolution_blocked == False,
+                ExceptionRecord.resolution_attempts < ExceptionRecord.max_resolution_attempts
             )
         ).order_by(desc(ExceptionRecord.created_at))
         
         result = await db.execute(query)
         active_exceptions = result.scalars().all()
         
+        # Also get blocked exceptions for reporting
+        blocked_query = select(ExceptionRecord).where(
+            and_(
+                ExceptionRecord.tenant == tenant,
+                ExceptionRecord.status.in_(['OPEN', 'IN_PROGRESS']),
+                ExceptionRecord.resolution_blocked == True
+            )
+        )
+        blocked_result = await db.execute(blocked_query)
+        blocked_exceptions = blocked_result.scalars().all()
+        
         if not active_exceptions:
             return {
                 'tenant': tenant,
                 'total_active': 0,
-                'prioritized_lists': {}
+                'total_blocked': len(blocked_exceptions),
+                'prioritized_lists': {},
+                'blocked_exceptions': [
+                    {
+                        'id': exc.id,
+                        'order_id': exc.order_id,
+                        'reason_code': exc.reason_code,
+                        'attempts': exc.resolution_attempts,
+                        'block_reason': exc.resolution_block_reason
+                    } for exc in blocked_exceptions
+                ]
             }
         
-        # Prioritization logic
+        # Prioritization logic (same as before but with attempt history)
         critical_urgent = []  # Critical severity + recent
         high_impact = []      # High customer/revenue impact
         sla_risk = []         # Approaching SLA deadlines
@@ -224,12 +249,17 @@ async def prioritize_active_exceptions(
             if age_hours > (sla_threshold_hours * 0.75):  # 75% of SLA time
                 priority_score += 30
             
+            # NEW: Reduce priority for exceptions with previous failed attempts
+            if exc.resolution_attempts > 0:
+                priority_score -= (exc.resolution_attempts * 10)  # Reduce by 10 points per attempt
+            
             # Categorize based on criteria
             if exc.severity == 'CRITICAL' and age_hours < 2:
                 critical_urgent.append({
                     'exception': exc,
                     'priority_score': priority_score,
                     'age_hours': age_hours,
+                    'resolution_attempts': exc.resolution_attempts,
                     'category': 'critical_urgent'
                 })
             elif priority_score > 120:  # High impact threshold
@@ -237,6 +267,7 @@ async def prioritize_active_exceptions(
                     'exception': exc,
                     'priority_score': priority_score,
                     'age_hours': age_hours,
+                    'resolution_attempts': exc.resolution_attempts,
                     'category': 'high_impact'
                 })
             elif age_hours > (sla_threshold_hours * 0.75):
@@ -244,6 +275,7 @@ async def prioritize_active_exceptions(
                     'exception': exc,
                     'priority_score': priority_score,
                     'age_hours': age_hours,
+                    'resolution_attempts': exc.resolution_attempts,
                     'category': 'sla_risk'
                 })
             else:
@@ -251,6 +283,7 @@ async def prioritize_active_exceptions(
                     'exception': exc,
                     'priority_score': priority_score,
                     'age_hours': age_hours,
+                    'resolution_attempts': exc.resolution_attempts,
                     'category': 'standard'
                 })
         
@@ -260,11 +293,12 @@ async def prioritize_active_exceptions(
         
         logger.info(f"Exception prioritization complete: {len(critical_urgent)} critical/urgent, "
                    f"{len(high_impact)} high impact, {len(sla_risk)} SLA risk, "
-                   f"{len(standard)} standard")
+                   f"{len(standard)} standard, {len(blocked_exceptions)} blocked from resolution")
         
         return {
             'tenant': tenant,
             'total_active': len(active_exceptions),
+            'total_blocked': len(blocked_exceptions),
             'prioritization_timestamp': current_time.isoformat(),
             'prioritized_lists': {
                 'critical_urgent': critical_urgent,
@@ -276,8 +310,18 @@ async def prioritize_active_exceptions(
                 'critical_urgent_count': len(critical_urgent),
                 'high_impact_count': len(high_impact),
                 'sla_risk_count': len(sla_risk),
-                'standard_count': len(standard)
-            }
+                'standard_count': len(standard),
+                'blocked_count': len(blocked_exceptions)
+            },
+            'blocked_exceptions': [
+                {
+                    'id': exc.id,
+                    'order_id': exc.order_id,
+                    'reason_code': exc.reason_code,
+                    'attempts': exc.resolution_attempts,
+                    'block_reason': exc.resolution_block_reason
+                } for exc in blocked_exceptions
+            ]
         }
 
 
@@ -291,15 +335,15 @@ async def attempt_automated_resolution(
     
     This task implements intelligent AI-powered automation that analyzes
     RAW order data to determine if exceptions can be resolved without
-    human intervention, replacing the previous random simulation with
-    genuine AI analysis.
+    human intervention. Now includes proper attempt tracking to prevent
+    repeated failed attempts.
     
     Args:
         prioritized_exceptions: Output from prioritize_active_exceptions
         tenant: Tenant context
         
     Returns:
-        Dict with automation results including AI analysis
+        Dict with automation results including AI analysis and attempt tracking
     """
     logger = get_run_logger()
     logger.info(f"Attempting AI-powered automated resolution for tenant {tenant}")
@@ -309,6 +353,8 @@ async def attempt_automated_resolution(
             'tenant': tenant,
             'automation_attempts': 0,
             'successful_resolutions': 0,
+            'failed_attempts': 0,
+            'blocked_exceptions': prioritized_exceptions.get('total_blocked', 0),
             'ai_analyses_performed': 0,
             'results': []
         }
@@ -320,6 +366,7 @@ async def attempt_automated_resolution(
     
     automation_results = []
     successful_resolutions = 0
+    failed_attempts = 0
     ai_analyses_performed = 0
     
     async with get_session() as db:
@@ -327,6 +374,7 @@ async def attempt_automated_resolution(
             exc_id = exc_data['exception'].id
             reason_code = exc_data['exception'].reason_code
             order_id = exc_data['exception'].order_id
+            current_attempts = exc_data.get('resolution_attempts', 0)
             
             # Reload the exception in this session to avoid detached object issues
             exc_query = select(ExceptionRecord).where(ExceptionRecord.id == exc_id)
@@ -337,16 +385,25 @@ async def attempt_automated_resolution(
                 logger.warning(f"Exception {exc_id} not found, skipping")
                 continue
             
-            # Skip if already resolved
+            # Skip if already resolved or blocked
             if exc.status in ['RESOLVED', 'CLOSED']:
                 continue
+                
+            if not exc.is_resolution_eligible:
+                logger.info(f"Exception {exc_id} not eligible for resolution: "
+                           f"attempts={exc.resolution_attempts}/{exc.max_resolution_attempts}, "
+                           f"blocked={exc.resolution_blocked}")
+                continue
+            
+            # Increment attempt counter BEFORE trying resolution
+            exc.increment_resolution_attempt()
             
             try:
                 # AI-powered resolution analysis (NO random simulation!)
                 ai_analysis = await analyze_automated_resolution_possibility(db, exc)
                 ai_analyses_performed += 1
                 
-                logger.info(f"AI analysis for exception {exc.id}: "
+                logger.info(f"AI analysis for exception {exc.id} (attempt {exc.resolution_attempts}): "
                            f"can_resolve={ai_analysis.get('can_auto_resolve', False)}, "
                            f"confidence={ai_analysis.get('confidence', 0.0)}")
                 
@@ -371,7 +428,7 @@ async def attempt_automated_resolution(
                             exc.resolved_at = datetime.utcnow()
                             exc.ops_note = (
                                 f"AI-resolved via {', '.join(automated_actions)} "
-                                f"(confidence: {confidence:.2f}, "
+                                f"(attempt {exc.resolution_attempts}, confidence: {confidence:.2f}, "
                                 f"success_prob: {success_probability:.2f})"
                             )
                             
@@ -381,6 +438,7 @@ async def attempt_automated_resolution(
                                 'exception_id': exc.id,
                                 'order_id': exc.order_id,
                                 'reason_code': reason_code,
+                                'attempt_number': exc.resolution_attempts,
                                 'automation_attempted': True,
                                 'result': 'resolved',
                                 'ai_analysis': ai_analysis,
@@ -388,64 +446,100 @@ async def attempt_automated_resolution(
                             })
                             
                             logger.info(f"AI auto-resolved exception {exc.id} ({reason_code}) "
-                                       f"for order {exc.order_id} using {automated_actions}")
+                                       f"for order {exc.order_id} on attempt {exc.resolution_attempts} "
+                                       f"using {automated_actions}")
                         else:
+                            failed_attempts += 1
                             automation_results.append({
                                 'exception_id': exc.id,
                                 'order_id': exc.order_id,
                                 'reason_code': reason_code,
+                                'attempt_number': exc.resolution_attempts,
                                 'automation_attempted': True,
                                 'result': 'execution_failed',
                                 'ai_analysis': ai_analysis,
-                                'action_required': 'manual_intervention'
+                                'action_required': 'manual_intervention',
+                                'blocked': exc.resolution_blocked
                             })
+                            
+                            # If max attempts reached, add block reason
+                            if exc.resolution_blocked:
+                                logger.warning(f"Exception {exc.id} blocked after {exc.resolution_attempts} "
+                                             f"failed attempts: {exc.resolution_block_reason}")
                     else:
+                        failed_attempts += 1
                         automation_results.append({
                             'exception_id': exc.id,
                             'order_id': exc.order_id,
                             'reason_code': reason_code,
+                            'attempt_number': exc.resolution_attempts,
                             'automation_attempted': False,
                             'result': 'no_actions_available',
                             'ai_analysis': ai_analysis,
-                            'action_required': 'manual_review'
+                            'action_required': 'manual_review',
+                            'blocked': exc.resolution_blocked
                         })
                 else:
                     # AI determined automation not suitable
+                    failed_attempts += 1
+                    
+                    # For low-confidence cases, block immediately to avoid repeated attempts
+                    if confidence < 0.3:
+                        exc.block_resolution(f"AI confidence too low ({confidence:.2f}) - manual review required")
+                    
                     automation_results.append({
                         'exception_id': exc.id,
                         'order_id': exc.order_id,
                         'reason_code': reason_code,
+                        'attempt_number': exc.resolution_attempts,
                         'automation_attempted': False,
                         'result': 'ai_not_recommended',
                         'ai_analysis': ai_analysis,
-                        'action_required': 'manual_intervention'
+                        'action_required': 'manual_intervention',
+                        'blocked': exc.resolution_blocked
                     })
                     
             except Exception as e:
                 # Fallback for AI analysis failures
-                logger.warning(f"AI analysis failed for exception {exc.id}: {str(e)}")
+                failed_attempts += 1
+                logger.warning(f"AI analysis failed for exception {exc.id} "
+                             f"(attempt {exc.resolution_attempts}): {str(e)}")
+                
+                # Block exceptions with repeated AI failures
+                if exc.resolution_attempts >= 2:
+                    exc.block_resolution(f"Repeated AI analysis failures: {str(e)}")
+                
                 automation_results.append({
                     'exception_id': exc.id,
                     'order_id': exc.order_id,
                     'reason_code': reason_code,
+                    'attempt_number': exc.resolution_attempts,
                     'automation_attempted': False,
                     'result': 'ai_analysis_failed',
                     'error': str(e),
-                    'action_required': 'manual_review'
+                    'action_required': 'manual_review',
+                    'blocked': exc.resolution_blocked
                 })
         
         await db.commit()
     
-    logger.info(f"AI-powered automation complete: {successful_resolutions}/{len(all_exceptions)} "
-               f"exceptions resolved, {ai_analyses_performed} AI analyses performed")
+    total_attempts = len(all_exceptions)
+    blocked_count = prioritized_exceptions.get('total_blocked', 0)
+    
+    logger.info(f"AI-powered automation complete: {successful_resolutions}/{total_attempts} "
+               f"exceptions resolved, {failed_attempts} failed attempts, "
+               f"{blocked_count} exceptions blocked from further attempts, "
+               f"{ai_analyses_performed} AI analyses performed")
     
     return {
         'tenant': tenant,
-        'automation_attempts': len(all_exceptions),
+        'automation_attempts': total_attempts,
         'successful_resolutions': successful_resolutions,
+        'failed_attempts': failed_attempts,
+        'blocked_exceptions': blocked_count,
         'ai_analyses_performed': ai_analyses_performed,
-        'automation_success_rate': successful_resolutions / len(all_exceptions) if all_exceptions else 0,
-        'ai_analysis_rate': ai_analyses_performed / len(all_exceptions) if all_exceptions else 0,
+        'automation_success_rate': successful_resolutions / total_attempts if total_attempts > 0 else 0,
+        'ai_analysis_rate': ai_analyses_performed / total_attempts if total_attempts > 0 else 0,
         'results': automation_results
     }
 

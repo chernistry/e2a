@@ -88,6 +88,13 @@ class ExceptionRecord(Base):
     ops_note: Mapped[str] = mapped_column(Text, nullable=True)
     client_note: Mapped[str] = mapped_column(Text, nullable=True)
     
+    # Resolution attempt tracking
+    resolution_attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    max_resolution_attempts: Mapped[int] = mapped_column(Integer, nullable=False)
+    last_resolution_attempt_at: Mapped[dt.datetime] = mapped_column(DateTime, nullable=True)
+    resolution_blocked: Mapped[bool] = mapped_column(default=False, nullable=False)
+    resolution_block_reason: Mapped[str] = mapped_column(Text, nullable=True)
+    
     # Audit fields
     created_at: Mapped[dt.datetime] = mapped_column(
         DateTime,
@@ -111,6 +118,7 @@ class ExceptionRecord(Base):
         Index("ix_exceptions_tenant_status", "tenant", "status"),
         Index("ix_exceptions_tenant_reason", "tenant", "reason_code"),
         Index("ix_exceptions_tenant_created", "tenant", "created_at"),
+        Index("ix_exceptions_resolution_eligible", "tenant", "status", "resolution_attempts", "resolution_blocked"),
     )
     
     # Relationships
@@ -122,6 +130,37 @@ class ExceptionRecord(Base):
         if self.context_data and "delay_minutes" in self.context_data:
             return self.context_data["delay_minutes"]
         return None
+    
+    @property
+    def is_resolution_eligible(self) -> bool:
+        """Check if exception is eligible for automated resolution attempts."""
+        return (
+            self.status in ['OPEN', 'IN_PROGRESS'] and
+            not self.resolution_blocked and
+            self.resolution_attempts < self.max_resolution_attempts
+        )
+    
+    def increment_resolution_attempt(self) -> None:
+        """Increment resolution attempt counter and update timestamp."""
+        self.resolution_attempts += 1
+        self.last_resolution_attempt_at = dt.datetime.utcnow()
+        
+        # Block further attempts if max reached
+        if self.resolution_attempts >= self.max_resolution_attempts:
+            self.resolution_blocked = True
+            self.resolution_block_reason = f"Maximum resolution attempts ({self.max_resolution_attempts}) reached"
+    
+    def block_resolution(self, reason: str) -> None:
+        """Block this exception from further automated resolution attempts."""
+        self.resolution_blocked = True
+        self.resolution_block_reason = reason
+    
+    def reset_resolution_tracking(self) -> None:
+        """Reset resolution tracking (useful for manual intervention)."""
+        self.resolution_attempts = 0
+        self.resolution_blocked = False
+        self.resolution_block_reason = None
+        self.last_resolution_attempt_at = None
 
 
 class Invoice(Base):
