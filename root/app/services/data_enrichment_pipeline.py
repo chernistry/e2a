@@ -25,8 +25,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.storage.db import get_session
 from app.storage.models import ExceptionRecord, OrderEvent
-from app.services.ai_exception_analyst import get_ai_exception_analyst
-from app.services.ai_automated_resolution import get_ai_automated_resolution_service
+from app.services.ai_exception_analyst import analyze_exception_or_fallback
+from app.services.ai_automated_resolution import analyze_automated_resolution_possibility
 from app.services.ai_order_analyzer import get_ai_order_analyzer
 from app.observability.tracing import get_tracer
 from app.observability.logging import ContextualLogger
@@ -132,8 +132,6 @@ class DataEnrichmentPipeline:
     
     def __init__(self):
         """Initialize the enrichment pipeline."""
-        self.ai_exception_analyst = get_ai_exception_analyst()
-        self.ai_resolution_service = get_ai_automated_resolution_service()
         self.ai_order_analyzer = get_ai_order_analyzer()
         
         # Stage processors mapping
@@ -461,7 +459,7 @@ class DataEnrichmentPipeline:
                 return False
             
             # Perform AI classification
-            await self.ai_exception_analyst.analyze_exception(db, record)
+            await analyze_exception_or_fallback(db, record)
             
             # Check if classification succeeded
             if record.ai_confidence is not None and record.ai_label is not None:
@@ -510,7 +508,7 @@ class DataEnrichmentPipeline:
                 return True  # Skip automation if classification is poor
             
             # Perform AI automated resolution analysis
-            resolution_result = await self.ai_resolution_service.analyze_automated_resolution_possibility(
+            resolution_result = await analyze_automated_resolution_possibility(
                 db, record
             )
             

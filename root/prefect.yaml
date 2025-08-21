@@ -7,10 +7,10 @@ build: null
 push: null
 pull: null
 
-# Business process deployments
+# Working deployments using octup-process-pool
 deployments:
   # Order processing pipeline
-  - name: order-processing
+  - name: order-processing-final
     entrypoint: /app/flows/order_processing_flow.py:order_processing_pipeline
     parameters:
       tenant: demo-3pl
@@ -19,28 +19,26 @@ deployments:
     schedule:
       interval: 1800  # Every 30 minutes
     work_pool:
-      name: default-agent-pool
+      name: octup-process-pool
       job_variables:
-        working_dir: /app
         env:
           PYTHONPATH: /app
 
   # Business orchestrator pipeline
-  - name: business-orchestrator
+  - name: business-orchestrator-final
     entrypoint: /app/flows/business_operations_orchestrator.py:business_operations_orchestrator
     parameters:
       tenant: demo-3pl
     schedule:
       interval: 3600  # Every hour
     work_pool:
-      name: default-agent-pool
+      name: octup-process-pool
       job_variables:
-        working_dir: /app
         env:
           PYTHONPATH: /app
 
   # Exception management pipeline
-  - name: exception-management
+  - name: exception-management-final
     entrypoint: /app/flows/exception_management_flow.py:exception_management_pipeline
     parameters:
       tenant: demo-3pl
@@ -48,14 +46,13 @@ deployments:
     schedule:
       interval: 14400  # Every 4 hours
     work_pool:
-      name: default-agent-pool
+      name: octup-process-pool
       job_variables:
-        working_dir: /app
         env:
           PYTHONPATH: /app
 
   # Billing management pipeline
-  - name: billing-management
+  - name: billing-management-final
     entrypoint: /app/flows/billing_management_flow.py:billing_management_pipeline
     parameters:
       tenant: demo-3pl
@@ -63,8 +60,21 @@ deployments:
     schedule:
       interval: 86400  # Daily
     work_pool:
-      name: default-agent-pool
+      name: octup-process-pool
       job_variables:
-        working_dir: /app
+        env:
+          PYTHONPATH: /app
+
+  # Data enrichment pipeline
+  - name: data-enrichment-final
+    entrypoint: /app/flows/data_enrichment_flow.py:data_enrichment_flow
+    parameters:
+      tenant: demo-3pl
+      force_reprocessing: false
+    schedule:
+      interval: 21600  # Every 6 hours
+    work_pool:
+      name: octup-process-pool
+      job_variables:
         env:
           PYTHONPATH: /app
