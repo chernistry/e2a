@@ -133,12 +133,10 @@ async def ingest_events_raw(
             if event_type in ["order_created", "fulfillment_created", "package_shipped", "delivered"]:
                 try:
                     await evaluate_sla(
-                        order_id=order_id,
-                        event_type=event_type,
-                        occurred_at=occurred_at,
-                        tenant=tenant,
                         db=db,
-                        event_data=event_data
+                        tenant=tenant,
+                        order_id=order_id,
+                        correlation_id=correlation_id
                     )
                 except Exception as sla_error:
                     # Log SLA evaluation error but don't fail the ingestion
@@ -165,6 +163,7 @@ async def ingest_events_raw(
                                 status="OPEN",
                                 severity=problem["severity"],
                                 correlation_id=correlation_id,
+                                max_resolution_attempts=3,  # Fix: Add required field with default value
                                 context_data={
                                     "customer_name": event_data.get("data", {}).get("order", {}).get("customer", {}).get("first_name", "") + " " + 
                                                    event_data.get("data", {}).get("order", {}).get("customer", {}).get("last_name", ""),
@@ -191,12 +190,20 @@ async def ingest_events_raw(
                         except Exception as exc_error:
                             # Log exception creation error but don't fail the ingestion
                             span.record_exception(exc_error)
-                            print(f"Warning: Failed to create exception for problem {problem['reason_code']}: {exc_error}")
+                            import logging
+                            logger = logging.getLogger(__name__)
+                            logger.error(f"Failed to create exception for problem {problem.get('reason_code', 'unknown')}: {exc_error}", 
+                                       extra={"order_id": order_id, "tenant": tenant, "correlation_id": correlation_id})
+                            print(f"Warning: Failed to create exception for problem {problem.get('reason_code', 'unknown')}: {exc_error}")
                             
                 except Exception as analysis_error:
                     # Log analysis error but don't fail the ingestion
                     span.record_exception(analysis_error)
                     span.set_attribute("order_analysis_failed", True)
+                    import logging
+                    logger = logging.getLogger(__name__)
+                    logger.error(f"Order analysis failed: {analysis_error}", 
+                               extra={"order_id": order_id, "tenant": tenant, "correlation_id": correlation_id})
             
             # Update metrics
             ingest_success_total.labels(
@@ -341,6 +348,30 @@ async def _process_event(
                     db, tenant, event.order_id, correlation_id
                 )
                 
+                # Analyze order for problems if this is an order creation event
+                if event.event_type == "order_created":
+                    from app.services.order_analyzer import get_order_analyzer
+                    analyzer = get_order_analyzer()
+                    problems = await analyzer.analyze_order(event.model_dump())
+                    
+                    # Create exceptions for detected problems
+                    for problem in problems:
+                        from app.storage.models import ExceptionRecord
+                        from app.services.ai_exception_analyst import analyze_exception_or_fallback
+                        
+                        exception = ExceptionRecord(
+                            tenant=tenant,
+                            order_id=event.order_id,
+                            reason_code=problem["reason_code"],
+                            status="OPEN",
+                            severity=problem["severity"],
+                            correlation_id=correlation_id,
+                            context_data=problem["context"]
+                        )
+                        db.add(exception)
+                        await db.flush()
+                        await analyze_exception_or_fallback(db, exception)
+
                 # Commit transaction
                 await db.commit()
                 

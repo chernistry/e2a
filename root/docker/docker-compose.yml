@@ -138,7 +138,7 @@ services:
         echo 'Waiting for Prefect server to be ready...' &&
         sleep 10 &&
         poetry run prefect config set PREFECT_API_URL=http://prefect-server:4200/api &&
-        poetry run prefect worker start --pool default-agent-pool --type process
+        poetry run prefect worker start --pool octup-process-pool --type process
       "
     env_file: ../.env
     environment:

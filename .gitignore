@@ -331,3 +331,4 @@ temp/
 .env.production.local
 root/.env.backup
 docs/.dev/*
+GEMINI.md
