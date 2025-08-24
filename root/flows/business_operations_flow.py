@@ -147,10 +147,18 @@ async def identify_billable_orders(
                 "payload": {}  # Simplified - just track order IDs for billing
             })
         
+        logger.info(f"Identified {len(billable_orders)} billable orders for tenant {tenant}")
+        
+        if billable_orders:
+            logger.info("Sample billable orders:")
+            for order in billable_orders[:3]:  # Log first 3 as sample
+                logger.info(f"  - Order ID: {order['order_id']}")
+        
         return {
             "billable_orders_count": len(billable_orders),
             "billable_orders": billable_orders[:10],  # Sample for logging
-            "analysis_period_hours": lookback_hours
+            "analysis_period_hours": lookback_hours,
+            "tenant": tenant
         }
 
 
@@ -172,6 +180,15 @@ async def generate_invoices(
     logger = get_run_logger()
     logger.info(f"Generating invoices for {len(billable_orders)} orders")
     
+    if not billable_orders:
+        logger.info("No billable orders to process")
+        return {
+            "invoices_generated": 0,
+            "generation_failures": 0,
+            "total_invoice_amount": 0.0,
+            "success_rate": 0
+        }
+    
     async with get_session() as db:
         invoice_service = InvoiceGeneratorService()
         
@@ -180,8 +197,10 @@ async def generate_invoices(
         total_amount = Decimal('0.00')
         
         for order_data in billable_orders:
+            order_id = order_data["order_id"]
+            logger.info(f"Processing invoice for order {order_id}")
+            
             try:
-                order_id = order_data["order_id"]
                 payload = order_data["payload"]
                 
                 # Extract order details for invoice
@@ -195,6 +214,8 @@ async def generate_invoices(
                     "line_items": order_info.get("line_items", [])
                 }
                 
+                logger.info(f"Invoice data for order {order_id}: ${invoice_data['total_amount']:.2f} {invoice_data['currency']}")
+                
                 invoice = await invoice_service.generate_invoice(
                     tenant=tenant,
                     **invoice_data
@@ -203,14 +224,18 @@ async def generate_invoices(
                 if invoice:
                     generated_count += 1
                     total_amount += Decimal(str(invoice.amount_cents)) / 100
+                    logger.info(f"✓ Generated invoice {invoice.id} for order {order_id}: ${invoice.amount_cents/100:.2f}")
                 else:
                     failed_count += 1
+                    logger.warning(f"⚠ No invoice generated for order {order_id} (may already exist)")
                     
             except Exception as e:
-                logger.error(f"Failed to generate invoice for order {order_data.get('order_id')}: {e}")
+                logger.error(f"✗ Failed to generate invoice for order {order_id}: {e}")
                 failed_count += 1
         
         await db.commit()
+        
+        logger.info(f"Invoice generation complete - Generated: {generated_count}, Failed: {failed_count}, Total: ${total_amount:.2f}")
         
         return {
             "invoices_generated": generated_count,

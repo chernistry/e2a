@@ -340,31 +340,19 @@ flowchart LR
         E7[order_delivered]
     end
     
-    subgraph "Order Processing Flow (30min)"
-        MONITOR[Monitor Order<br/>Fulfillment Progress]
-        STAGES[Manage Processing<br/>Stages - Optional]
-        SLA_CHECK[Detect SLA<br/>Breaches]
-        INVOICE_GEN[Generate Invoices<br/>for Completed Orders]
+    subgraph "Event Processor Flow (15min)"
+        MONITOR[Monitor Recent<br/>Order Events]
+        DETECT[Detect New<br/>Exceptions & SLA Issues]
+        AI_QUEUE[Process AI Analysis<br/>Queue for Exceptions]
+        RESOLVE[Attempt Automated<br/>Resolution with Circuit Breaker]
     end
     
-    subgraph "Exception Management Flow (4hr)"
-        ANALYZE[Analyze Exception<br/>Patterns & Trends]
-        PRIORITIZE[Prioritize Eligible<br/>Exceptions by Severity]
-        AUTO_RESOLVE[Attempt Automated<br/>Resolution with AI]
-        TRACK_RESOLUTION[Track Resolution<br/>Success Rates]
-    end
-    
-    subgraph "Billing Management Flow (Daily)"
-        IDENTIFY[Identify Billable<br/>Operations]
+    subgraph "Business Operations Flow (Daily)"
+        IDENTIFY[Identify Billable<br/>Orders & Operations]
         GENERATE[Generate Invoice<br/>Records]
-        VALIDATE[Validate Invoice<br/>Accuracy with AI]
+        VALIDATE[Validate Invoice<br/>Accuracy]
         ADJUST[Process Billing<br/>Adjustments]
-    end
-    
-    subgraph "Business Orchestrator (Hourly)"
-        COORDINATE[Coordinate All<br/>Business Processes]
         METRICS[Generate Business<br/>Intelligence Reports]
-        HEALTH[Monitor System<br/>Health & Performance]
     end
     
     subgraph "Outputs"
@@ -379,31 +367,22 @@ flowchart LR
     E3 --> MONITOR
     E4 --> MONITOR
     E5 --> MONITOR
-    E6 --> INVOICE_GEN
-    E7 --> INVOICE_GEN
+    E6 --> IDENTIFY
+    E7 --> IDENTIFY
     
-    MONITOR --> STAGES
-    MONITOR --> SLA_CHECK
-    SLA_CHECK --> ANALYZE
+    MONITOR --> DETECT
+    DETECT --> AI_QUEUE
+    AI_QUEUE --> RESOLVE
+    RESOLVE --> RESOLVED
     
-    ANALYZE --> PRIORITIZE
-    PRIORITIZE --> AUTO_RESOLVE
-    AUTO_RESOLVE --> TRACK_RESOLUTION
-    TRACK_RESOLUTION --> RESOLVED
-    
-    INVOICE_GEN --> IDENTIFY
     IDENTIFY --> GENERATE
     GENERATE --> VALIDATE
     VALIDATE --> ADJUST
-    
-    GENERATE --> INVOICES
     ADJUST --> INVOICES
-    RESOLVED --> REPORTS
-    INVOICES --> REPORTS
-    
-    COORDINATE --> METRICS
     METRICS --> REPORTS
-    HEALTH --> ALERTS
+    
+    DETECT --> ALERTS
+    RESOLVE --> ALERTS
     
     style E1 fill:#4caf50
     style E2 fill:#e3f2fd

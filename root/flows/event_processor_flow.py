@@ -230,27 +230,52 @@ async def process_ai_analysis_queue(
         result = await db.execute(query)
         exceptions = result.scalars().all()
         
+        logger.info(f"Found {len(exceptions)} exceptions requiring AI analysis")
+        
+        if not exceptions:
+            logger.info("No exceptions require AI analysis at this time")
+            return {
+                "exceptions_processed": 0,
+                "ai_analysis_success": 0,
+                "success_rate": 0,
+                "details": "No pending exceptions found"
+            }
+        
         processed_count = 0
         success_count = 0
         
+        # Capture exception details before processing
+        exception_details = [
+            {"id": exc.id, "order_id": exc.order_id, "reason_code": exc.reason_code}
+            for exc in exceptions[:5]  # Sample for logging
+        ]
+        
         for exception in exceptions:
+            logger.info(f"Processing exception {exception.id} - Order: {exception.order_id}, Reason: {exception.reason_code}")
+            logger.info(f"Exception details - Status: {exception.status}, Severity: {exception.severity}")
+            
             try:
                 # AI analysis with circuit breaker
+                logger.info(f"Starting AI analysis for exception {exception.id}")
                 await analyze_exception_or_fallback(db, exception)
                 success_count += 1
                 processed_count += 1
+                logger.info(f"✓ Successfully analyzed exception {exception.id}")
                 
             except Exception as e:
-                logger.error(f"AI analysis failed for exception {exception.id}: {e}")
+                logger.error(f"✗ AI analysis failed for exception {exception.id}: {e}")
                 processed_count += 1
                 continue
         
         await db.commit()
         
+        logger.info(f"AI analysis batch complete - Total: {processed_count}, Success: {success_count}, Success Rate: {success_count/processed_count*100:.1f}%")
+        
         return {
             "exceptions_processed": processed_count,
             "ai_analysis_success": success_count,
-            "success_rate": success_count / processed_count if processed_count > 0 else 0
+            "success_rate": success_count / processed_count if processed_count > 0 else 0,
+            "batch_details": exception_details
         }
 
 
