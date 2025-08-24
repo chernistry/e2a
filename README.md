@@ -132,257 +132,291 @@ AI_SAMPLING_SEVERITY: important_only
 
 ## Architecture
 
+**🚧 Current Implementation Status**: 
+- ✅ **Shopify Mock API**: Fully functional with realistic order generation and webhook integration
+- ✅ **Order Analysis**: AI-powered problem detection with rule-based fallback working end-to-end
+- ✅ **Exception Management**: Complete pipeline from detection to AI analysis and resolution tracking
+- 🔄 **WMS/Carrier Integration**: Schemas and endpoints ready, awaiting real system integration
+- ✅ **Prefect Orchestration**: All business flows deployed and running on scheduled intervals
+- ✅ **Real-time Dashboard**: Live metrics and monitoring with WebSocket updates
+
 ### High-Level Data Flow
 
 ```mermaid
 flowchart TD
     subgraph "Data Sources"
-        WMS[WMS System<br/>Pick/Pack Events]
-        SHOPIFY[Shopify<br/>Order Events]
-        CARRIER[Carrier APIs<br/>Shipping Events]
+        SHOPIFY_MOCK[Shopify Mock API<br/>Demo Order Events]
+        WMS[WMS System<br/>Pick/Pack Events<br/>Schema Ready]
+        CARRIER[Carrier APIs<br/>Shipping Events<br/>Schema Ready]
     end
     
     subgraph "E²A Platform"
-        INGEST[Event Ingestion<br/>POST /ingest/*]
+        INGEST[Event Ingestion<br/>POST /ingest/events<br/>POST /ingest/shopify<br/>POST /ingest/wms<br/>POST /ingest/carrier]
+        ORDER_ANALYZER[Order Analyzer<br/>AI + Rule-based]
         SLA[SLA Engine<br/>Real-time Monitoring]
-        AI[AI Analyst<br/>Exception Analysis]
-        PREFECT[Prefect Flows<br/>Business Processes]
+        AI[AI Exception Analyst<br/>Analysis & Resolution]
     end
     
     subgraph "Business Process Flows"
         ORDER[Order Processing<br/>30min schedule]
-        EXCEPTION[Exception Management<br/>2hr schedule]
-        BILLING[Billing Management<br/>Daily 2AM]
+        EXCEPTION[Exception Management<br/>4hr schedule]
+        BILLING[Billing Management<br/>Daily schedule]
         ORCHESTRATOR[Business Orchestrator<br/>Hourly coordination]
+        DATA_ENRICHMENT[Data Enrichment<br/>6hr schedule]
     end
     
     subgraph "Outputs"
-        EXCEPTIONS[SLA Exceptions<br/>+ AI Explanations]
+        EXCEPTIONS[Exception Records<br/>+ AI Analysis]
         INVOICES[Generated Invoices<br/>+ Adjustments]
-        ALERTS[Real-time Alerts<br/>Slack/Dashboard]
+        DASHBOARD[Real-time Dashboard<br/>Live Metrics]
         REPORTS[Analytics<br/>Metrics & Trends]
     end
     
+    SHOPIFY_MOCK --> INGEST
     WMS --> INGEST
-    SHOPIFY --> INGEST
     CARRIER --> INGEST
     
+    INGEST --> ORDER_ANALYZER
+    ORDER_ANALYZER --> EXCEPTIONS
     INGEST --> SLA
-    SLA --> AI
     SLA --> EXCEPTIONS
     
-    INGEST --> PREFECT
-    PREFECT --> ORDER
-    PREFECT --> EXCEPTION
-    PREFECT --> BILLING
-    PREFECT --> ORCHESTRATOR
+    EXCEPTIONS --> AI
+    AI --> EXCEPTIONS
     
     ORDER --> INVOICES
     EXCEPTION --> EXCEPTIONS
     BILLING --> INVOICES
     ORCHESTRATOR --> REPORTS
+    DATA_ENRICHMENT --> EXCEPTIONS
     
-    AI --> EXCEPTIONS
-    SLA --> ALERTS
-    BILLING --> ALERTS
-    
+    EXCEPTIONS --> DASHBOARD
+    INVOICES --> DASHBOARD
     EXCEPTIONS --> REPORTS
     INVOICES --> REPORTS
     
+    style SHOPIFY_MOCK fill:#4caf50
     style WMS fill:#e1f5fe
-    style SHOPIFY fill:#e1f5fe
     style CARRIER fill:#e1f5fe
     style ORDER fill:#e8f5e8
     style EXCEPTION fill:#fff3e0
     style BILLING fill:#f3e5f5
     style ORCHESTRATOR fill:#e3f2fd
+    style DATA_ENRICHMENT fill:#e8eaf6
     style EXCEPTIONS fill:#e8f5e8
     style INVOICES fill:#e8f5e8
-    style ALERTS fill:#fff3e0
+    style DASHBOARD fill:#fff3e0
     style REPORTS fill:#f3e5f5
 ```
-
-[See bigger](https://www.mermaidchart.com/play#pako:eNqFU-1q2zAUfRWRwX5slGwrgVJGwU3c1pDUxjb7wO0Pxb5KtDq2kZRuYeyl9gh7sl1LSqLEMTHYyPf7nHv0e5DXBQyuB6ysf-ZLKhRJJ08VwUeu5wtBmyV5GkyooiSp1yIH-TQw7vb5OksyfEmykQpWn-dieBPx_GUY0fyF-K9QKfm8j04ewii4-54ly7rhbKPDQ1GA6IaOvTgO_DgbUyE4BnhRIHV8suRNw6vFYQpUhTl0Jvf__fVIVFLFarFyRw8e7_0kzXQZElQLkIrXlYEQJikZcm0bvnMBTL0MX-JXC16Bjo2BlheKr4DM6oqrWmCak-EFmRcQr6IlMqQT_F85NG0ra-Uu7Cj27_xxmkUCGOSK3OFSDO7btcSWUpJI1LgECeehH6eYai4HYTxBjs0KbBCOb9fYQInpznD-t7EfpUH4mO0xzGhFF7BCDvuyboPpFLnObnlZtns7nxHG4wdcTeylYZztQIQNCNr2lFY3-RLXg6ZanGUiXKtmrQ6g78AkZqNbRKb6e1wc2poSh9XWZ1c4X8Jg7CfZPVTtSFCgfF5rjuxtc4sfa6lWR5L2pn6cJtleMF4JQllVl3hhhhMql_OaisLJiv0obNO0WBTPTfwMlMAzeUtSgbB7tNDezIuLGyt1Y7N3sGO3F65jN19j0U5ky1ZC2lqDFxz-75ntqWBFbuz2Rzu0HLvmXcGuy4rrVKm9htwxdAsL0qzR2Hc9TkKwbU7kuX202-7L7YlSOlV0x5_WRbeRaz8aMum22o7VN4RUmxK0IhhexOs38JGNGLi-rTL6_FuF9PkNtdZ7xUZw5Xr3BJsIxtglfHAjttit_xJGbHRY36Hatrlkn1hxsk3SO8mOqb4AQ3zvnJbcozkHf_4DsukqBw)
 
 ### System Components
 
 ```mermaid
 graph TD
     subgraph "Ingress & API Layer"
-        API[FastAPI Service]
+        API[FastAPI Service<br/>Port 8000]
+        DASHBOARD_UI[Next.js Dashboard<br/>Port 3000]
     end
     
     subgraph "Processing Layer"
-        SLA_ENGINE[SLA Engine]
-        AI_ANALYST[AI Analyst Service]
-        PROCESSING_STAGE[Processing Stage Service]
-        DATA_COMPLETENESS[Data Completeness Service]
-        PREFECT[Prefect Server]
+        ORDER_ANALYZER[Order Analyzer Service<br/>AI + Rule-based Detection]
+        SLA_ENGINE[SLA Engine<br/>Real-time Breach Detection]
+        AI_ANALYST[AI Exception Analyst<br/>OpenRouter Integration]
+        AI_RESOLUTION[AI Automated Resolution<br/>Smart Resolution Attempts]
+        PROCESSING_STAGE[Processing Stage Service<br/>Order Pipeline Tracking]
+        PREFECT_SERVER[Prefect Server<br/>Port 4200]
     end
     
     subgraph "Business Process Flows"
-        ORDER_FLOW[Order Processing<br/>Pipeline]
-        EXCEPTION_FLOW[Exception Management<br/>Pipeline]
-        BILLING_FLOW[Billing Management<br/>Pipeline]
-        ORCHESTRATOR_FLOW[Business Operations<br/>Orchestrator]
+        ORDER_FLOW[Order Processing Flow<br/>30min intervals]
+        EXCEPTION_FLOW[Exception Management Flow<br/>4hr intervals]
+        BILLING_FLOW[Billing Management Flow<br/>Daily intervals]
+        ORCHESTRATOR_FLOW[Business Orchestrator<br/>Hourly coordination]
+        ENRICHMENT_FLOW[Data Enrichment Flow<br/>6hr intervals]
     end
     
     subgraph "Storage Layer"
-        SUPABASE[(Supabase/Postgres)]
-        REDIS[(Redis)]
-        DLQ[Dead Letter Queue]
+        SUPABASE[(Supabase/PostgreSQL<br/>Port 54322)]
+        REDIS[(Redis<br/>Caching & Sessions)]
+        DLQ[Dead Letter Queue<br/>Failed Event Recovery]
     end
     
     subgraph "External Integrations"
-        SHOPIFY_MOCK[Shopify Mock API]
+        SHOPIFY_MOCK[Shopify Mock API<br/>Port 8090<br/>Demo Data Generator]
+        OPENROUTER[OpenRouter API<br/>AI Model Access]
     end
     
     subgraph "Observability"
-        DASHBOARD[Next.js Dashboard]
-        PROMETHEUS[Prometheus Metrics]
+        PROMETHEUS[Prometheus Metrics<br/>Performance Monitoring]
+        SUPABASE_STUDIO[Supabase Studio<br/>Port 54323<br/>Database Management]
     end
     
+    API --> ORDER_ANALYZER
     API --> SLA_ENGINE
     API --> AI_ANALYST
+    API --> AI_RESOLUTION
     API --> PROCESSING_STAGE
-    API --> DATA_COMPLETENESS
-    API --> PREFECT
     
-    PREFECT --> ORDER_FLOW
-    PREFECT --> EXCEPTION_FLOW
-    PREFECT --> BILLING_FLOW
-    PREFECT --> ORCHESTRATOR_FLOW
+    PREFECT_SERVER --> ORDER_FLOW
+    PREFECT_SERVER --> EXCEPTION_FLOW
+    PREFECT_SERVER --> BILLING_FLOW
+    PREFECT_SERVER --> ORCHESTRATOR_FLOW
+    PREFECT_SERVER --> ENRICHMENT_FLOW
     
+    ORDER_ANALYZER --> SUPABASE
     SLA_ENGINE --> SUPABASE
     AI_ANALYST --> SUPABASE
+    AI_RESOLUTION --> SUPABASE
     PROCESSING_STAGE --> SUPABASE
-    DATA_COMPLETENESS --> SUPABASE
     ORDER_FLOW --> SUPABASE
     EXCEPTION_FLOW --> SUPABASE
     BILLING_FLOW --> SUPABASE
     ORCHESTRATOR_FLOW --> SUPABASE
+    ENRICHMENT_FLOW --> SUPABASE
     
     API --> REDIS
     API --> DLQ
     SHOPIFY_MOCK --> API
+    AI_ANALYST --> OPENROUTER
+    AI_RESOLUTION --> OPENROUTER
     
-    API -- Exposes --> PROMETHEUS
-    API -- Serves --> DASHBOARD
+    API --> PROMETHEUS
+    DASHBOARD_UI --> API
+    SUPABASE --> SUPABASE_STUDIO
 ```
-
-[See bigger](https://www.mermaidchart.com/play#pako:eNqFVF1vmzAU_SsWD1P30PZ9qio5wUlQIaZAtVZkihxym7ARQLbZEk377zOYBJMQBSmSde7Xufeem79WUqzB-mZtOCu3KLIXOVKfqFYaWFhOvuEgBPqCsO8glx2ALyztVX8KjCdMyNoYAv-dJvCjs4YuHr_EYcaSX8jJJaikMi3y1gPytX5cFPV5kaiiab65rKhyLsl86sxJrJ6I5Js0N2tiZ4nn2P0Ioxg7COcsOwg5wM0PyISMo9jn8AmJ9gBuOAR4GqvfWeh10qNKEa5H1bJHk6z4I0zqNLBJsJy49HtM-Ro46vp8WvHHZz8tIet3Q97HxI8cOtdhZJ9AWY8QeSxnG9hBLq-FjhzXdeZTHThKs6we5-0wGoxnJIwCHNGW66kxWoJeoGiCKU-2IKSCCn5zOqFyUpUH9vnm4xEOSXwXViVbMQGPfiFkrbqv5jaI7YTxXQDrtIfb7mtsA1sjF6RUI32toLq9K7JXvkoapirFmcrGL8ta3Vq96mUU9cibS95jD6oM9qgRiRIZ7Ezpz6jvTD6WHq0vYFuU6ecBeUUv1XV-dCWU6tgqzVJ5MHnZOJyNKA7seA57-fBTIJuJ7apgfN3TNvVINCNvoZJ3sQO5hUogDyRPEzFcvD7g-_tn47z6eHdWfbw9Iw02U2tgNRMN1cMZim_wB2XQszSptCmbsO5kLm3927i0mwcwlPlM5yaFbgp6KK1G29ZPrQwYO8IDxj7jAQeT8mDyM84DPseB99H-0ppj6kPqjswdPrVa0EfQWgxJ650eLWYqRPZlIUC06jgKsefS_Ndqj5OgF7n17z8z8-IY)
 
 ### Data Flow
 
 ```mermaid
 sequenceDiagram
-    participant Source as Event Source<br/>(WMS/Shopify)
+    participant Source as Shopify Mock API<br/>(Demo Events)
     participant API as FastAPI<br/>Ingest Endpoint
+    participant Analyzer as Order Analyzer<br/>(AI + Rules)
     participant SLA as SLA Engine
-    participant STAGE as Processing Stage<br/>Service
-    participant DB as Database<br/>(Postgres)
-    participant AI as AI Analyst
-    participant Prefect as Prefect<br/>Business Flows
+    participant DB as Database<br/>(Supabase)
+    participant AI as AI Exception<br/>Analyst
+    participant Prefect as Prefect Flows<br/>(Background)
     participant Dashboard as Dashboard<br/>(Real-time)
 
     Note over Source,Dashboard: Real-time Event Processing
-    Source->>API: POST /ingest/{source}<br/>order_paid, pick_started, etc.
-    API->>SLA: Evaluate event against SLA policies
-    API->>STAGE: Track processing stage progression
-    SLA-->>DB: Create Exception record on breach
-    STAGE-->>DB: Update processing stage status
-    DB-->>AI: Trigger analysis for new exception
-    AI-->>DB: Store AI-generated narrative + resolution tracking
+    Source->>API: POST /ingest/events<br/>order_created with problems
+    API->>API: Check idempotency (Redis)
+    API->>DB: Create OrderEvent record
+    
+    alt Order Creation Event
+        API->>Analyzer: Analyze order for problems
+        Analyzer->>Analyzer: AI analysis + rule fallback
+        Analyzer-->>DB: Create ExceptionRecord(s)
+        DB->>AI: Trigger AI analysis
+        AI-->>DB: Store analysis results
+    end
+    
+    alt SLA-related Events
+        API->>SLA: Evaluate against SLA policies
+        SLA-->>DB: Create Exception on breach
+    end
+    
     API-->>Dashboard: Real-time metrics update
     
-    Note over Prefect,Dashboard: Business Process Automation
-    Prefect->>DB: Order Processing Pipeline<br/>Monitor stages + SLA compliance
-    Prefect->>DB: Exception Management Pipeline<br/>Smart resolution tracking (80 percent efficiency)
-    Prefect->>DB: Billing Management Pipeline<br/>Generate invoices, validate accuracy
-    Prefect->>DB: Business Orchestrator<br/>Coordinate all processes
+    Note over Prefect,Dashboard: Background Business Processes
+    Prefect->>DB: Order Processing (30min)<br/>Monitor fulfillment stages
+    Prefect->>DB: Exception Management (4hr)<br/>Automated resolution attempts
+    Prefect->>DB: Billing Management (daily)<br/>Invoice generation & validation
+    Prefect->>DB: Business Orchestrator (hourly)<br/>Coordinate all processes
     Prefect-->>Dashboard: Update business metrics
 ```
-
-[See bigger](https://www.mermaidchart.com/play#pako:eNp1Ut9v2jAQ_ldOPG0SjHc0IUGhE9IYaHTaS6XqcI5wWrCzs0PXVf3fd3YMlDbLA7HJfT_uu3vuGVdQb9Tz9Lsha2jGWAoe7i3oU6MENlyjDbBxjRgC9DA_0vn-eSvD8Yefy81ws3c1754-vkdO1osIu0Uf9JgQC1uSDzC3Re3Yhg61r5OIia-5LdnS-5LZNFbMMOAWfTaydj6UQr7LRTKhvxOL1ZPv0FwL7ciEWJaPiXTaeNX32kDlHn2HD_T7rUMpWjv50vr5TlgNAh9IDbXIby4QuCNJDrB_RozgXJ0jXoszKsy2bLEtYjAea4wjWK82dzDklOTw2advL0nWSUHyUCMXfajZ_HrwQf2S3iiYTy2XUiiR5jtSMawaVFuUVLFEtr4dQe0qbZNy1_rPQEGz6QhuhCJi_sdQHdhZEDIqC3ra6iezbxGzaQRM1O2dcFlq15jSZw87J2DpEehEkX0tThKb4ITivSRLomoFWBQ98JEuPcTirgQPFISNh6YuFNrWv51AnvLrEZyHnbOHSRPcAS_-MiZ7XMWkX80J1lxTpQxpDktnWZuAXVPtuKoOMd1aXFxQ38V2SXOpMZWUAFeMaXf_ku5fCCTW9wHV30AJXXVK5ZpzqsLR2P8Yv-Rwge3RsbbRB10HjqEBGtMImqdO3lNQKzF73UDlcJIYb5wuAttEUFWx4RgOven4em4_0pRgeyLN07u3vZd_BxiXyw)
 
 ### Business Process Pipeline
 
 ```mermaid
 flowchart LR
-    subgraph "Order Events"
-        E1[order_paid]
-        E2[pick_completed]
-        E3[pack_completed]
-        E4[ship_label_printed]
-        E5[order_fulfilled]
-        E6[order_delivered]
+    subgraph "Event Sources"
+        E1[order_created<br/>with problems]
+        E2[order_paid]
+        E3[pick_completed]
+        E4[pack_completed]
+        E5[ship_label_printed]
+        E6[order_fulfilled]
+        E7[order_delivered]
     end
     
-    subgraph "Order Processing Flow"
-        MONITOR[Monitor Order<br/>Fulfillment]
-        STAGES[Track Processing<br/>Stages]
-        COMPLETE[Process Completed<br/>Orders]
-        SLA_CHECK[Monitor SLA<br/>Compliance]
+    subgraph "Order Processing Flow (30min)"
+        MONITOR[Monitor Order<br/>Fulfillment Progress]
+        STAGES[Manage Processing<br/>Stages - Optional]
+        SLA_CHECK[Detect SLA<br/>Breaches]
+        INVOICE_GEN[Generate Invoices<br/>for Completed Orders]
     end
     
-    subgraph "Exception Management Flow"
-        ANALYZE[Analyze Exception<br/>Patterns]
-        PRIORITIZE[Prioritize Eligible<br/>Exceptions - 80 percent efficiency]
-        AUTO_RESOLVE[Attempt Automated<br/>Resolution + Tracking]
+    subgraph "Exception Management Flow (4hr)"
+        ANALYZE[Analyze Exception<br/>Patterns & Trends]
+        PRIORITIZE[Prioritize Eligible<br/>Exceptions by Severity]
+        AUTO_RESOLVE[Attempt Automated<br/>Resolution with AI]
+        TRACK_RESOLUTION[Track Resolution<br/>Success Rates]
     end
     
-    subgraph "Billing Management Flow"
-        IDENTIFY[Identify Billable<br/>Orders]
-        GENERATE[Generate<br/>Invoices]
-        VALIDATE[Validate Invoice<br/>Accuracy]
+    subgraph "Billing Management Flow (Daily)"
+        IDENTIFY[Identify Billable<br/>Operations]
+        GENERATE[Generate Invoice<br/>Records]
+        VALIDATE[Validate Invoice<br/>Accuracy with AI]
         ADJUST[Process Billing<br/>Adjustments]
     end
     
+    subgraph "Business Orchestrator (Hourly)"
+        COORDINATE[Coordinate All<br/>Business Processes]
+        METRICS[Generate Business<br/>Intelligence Reports]
+        HEALTH[Monitor System<br/>Health & Performance]
+    end
+    
     subgraph "Outputs"
-        INVOICES[Invoice Records]
-        ADJUSTMENTS[Adjustment Records]
-        RESOLVED[Resolved Exceptions]
-        METRICS[Business Metrics]
+        INVOICES[Invoice Records<br/>with Adjustments]
+        RESOLVED[Resolved Exceptions<br/>with AI Analysis]
+        REPORTS[Business Metrics<br/>& Analytics]
+        ALERTS[Real-time Alerts<br/>& Notifications]
     end
     
     E1 --> MONITOR
     E2 --> MONITOR
     E3 --> MONITOR
     E4 --> MONITOR
-    E5 --> COMPLETE
-    E6 --> COMPLETE
+    E5 --> MONITOR
+    E6 --> INVOICE_GEN
+    E7 --> INVOICE_GEN
     
     MONITOR --> STAGES
-    STAGES --> SLA_CHECK
-    COMPLETE --> IDENTIFY
-    
+    MONITOR --> SLA_CHECK
     SLA_CHECK --> ANALYZE
+    
     ANALYZE --> PRIORITIZE
     PRIORITIZE --> AUTO_RESOLVE
-    AUTO_RESOLVE --> RESOLVED
+    AUTO_RESOLVE --> TRACK_RESOLUTION
+    TRACK_RESOLUTION --> RESOLVED
     
+    INVOICE_GEN --> IDENTIFY
     IDENTIFY --> GENERATE
     GENERATE --> VALIDATE
     VALIDATE --> ADJUST
     
     GENERATE --> INVOICES
-    ADJUST --> ADJUSTMENTS
-    COMPLETE --> METRICS
-    RESOLVED --> METRICS
+    ADJUST --> INVOICES
+    RESOLVED --> REPORTS
+    INVOICES --> REPORTS
     
-    style E1 fill:#e3f2fd
+    COORDINATE --> METRICS
+    METRICS --> REPORTS
+    HEALTH --> ALERTS
+    
+    style E1 fill:#4caf50
     style E2 fill:#e3f2fd
     style E3 fill:#e3f2fd
     style E4 fill:#e3f2fd
     style E5 fill:#e3f2fd
     style E6 fill:#e3f2fd
+    style E7 fill:#e3f2fd
     style INVOICES fill:#e8f5e8
-    style ADJUSTMENTS fill:#fff3e0
     style RESOLVED fill:#e8f5e8
-    style METRICS fill:#f3e5f5
+    style REPORTS fill:#f3e5f5
+    style ALERTS fill:#fff3e0
 ```
-
-[See bigger](https://www.mermaidchart.com/play#pako:eNqFVF1v2jAU_SsWe662QqmqaqqUgttlIwSFFKkNEzLJTestOJHjsLFp_32OYwezJisPCN9zzv2-_B7EeQKD60Ga5T_iF8IFmgVrhuSnrLbPnBQvaD3weQIc4T0wUa4HDVx_8HmU19CmIDT5atmHUUHj75s43xUZCDjBRlFB-rCLqHyhxSYjW8g2BafsH3ys46VVltIsOwUvNZhARvfAWxBY0vzoqWvB8xjKkrJndCe7YBfo-XM39IPIyxkVOUdK8HHL39_cNRnsZEusHCa-t5jhEEfaJ5qYKpVIyUuLv5w5m8knPPnSRpAWRVVCSlgMb1aBf8ZQCJoz5BFGnqHO6VUlztyZPT7hyGEkO_wC1IpUtAURAjizU1sErh-4oftUF0NzTgWVMicWsrdK03qwVc5D6G8CvPRnKxlLOt0VAjmVyHfENCGAMs-qWvhmZbeyw_VY_lOXO8Xz0L17jNxEwjQ9oFpEthl0d_wez3HgyAndAwMuk1I0l-1zKgdmEVfOzJ3WxBXJaCKJSJOUwInjipP4YJc-_fywDNvJ69wbdvKtKkWdf_n2TlaiqE7PzJ2vfHeCl5HOAAUQy1UvXwX3ZC-W0TFaB1HPZhqpMewhQZ1z9HAYuJNldFvJu6jL8UBwGvekj8_R2dmNuRZtG3bYRh22iw7bWNnMNWnjZYex-dZihbcn1UCGrjCzLLa25SuGPpMG0g8FHM-hwY7vRmftvRZbFkUxnbeDm4QUwaxmA5mXgswyNpB5NZHV5G2nJ0qzOzopRbZ0amM6OqXn3yAm89eI3l5xyKBegvof8fodjNJhmpxAw35o1A9d9EPjfuiyFzK9MISrdAxXNsHqieakaTqCDzanbUafE90g42AE43S8ZoM_fwEWaDTq)
 
 ### Technology Stack
 
@@ -404,9 +438,9 @@ flowchart LR
 
 **Key Endpoints:**
 - **Dashboard**: http://localhost:3000
-- API: http://localhost:8000 | API Docs: http://localhost:8000/docs
-- Supabase Studio: http://localhost:54323 | Prefect UI: http://localhost:4200
-- **Shopify Mock API**: http://localhost:8090/docs
+- **API**: http://localhost:8000 | **API Docs**: http://localhost:8000/docs
+- **Supabase Studio**: http://localhost:54323 | **Prefect UI**: http://localhost:4200
+- **Shopify Mock API**: http://localhost:8090 | **Mock API Docs**: http://localhost:8090/docs
 
 **🔧 Advanced Topics**: See [**KB.MD**](docs/KB.MD) for troubleshooting, performance tuning, monitoring, and production deployment.
 
@@ -418,7 +452,15 @@ flowchart LR
 
 **Why Prefect?**: Python-first, advanced error handling with retries/circuit breakers, observability, easy local dev w/ Community Server, native async.
 
-E²A uses consolidated business process flows managed by the Business Operations Orchestrator. Order processing integrates processing stage tracking with SLA monitoring, exception management uses smart resolution tracking (80% efficiency improvement), and billing automates invoice generation with validation. Prefect deployments run these flows on schedules or on-demand via UI, API, or CLI.
+E²A uses consolidated business process flows managed by the Business Operations Orchestrator:
+
+- **Order Processing Flow** (30min intervals): Monitors order fulfillment progress, manages optional processing stages, detects SLA breaches, and generates invoices for completed orders
+- **Exception Management Flow** (4hr intervals): Analyzes exception patterns, prioritizes eligible exceptions by severity, attempts automated resolution with AI, and tracks resolution success rates  
+- **Billing Management Flow** (Daily): Identifies billable operations, generates invoice records, validates accuracy with AI assistance, and processes billing adjustments
+- **Business Operations Orchestrator** (Hourly): Coordinates all business processes, generates business intelligence reports, and monitors system health
+- **Data Enrichment Flow** (6hr intervals): Enriches order data with additional context and performs data completeness validation
+
+Prefect deployments run these flows on schedules or on-demand via UI, API, or CLI with comprehensive error handling and retry logic.
 
 ## License
 
@@ -437,4 +479,4 @@ This project uses several open-source packages:
 
 ---
 
-**Last Updated**: 2025-08-19  
+**Last Updated**: 2025-08-24  
