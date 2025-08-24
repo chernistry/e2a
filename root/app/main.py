@@ -21,11 +21,11 @@ from app.settings import settings
 from app.storage.db import init_database, close_database, get_session
 from app.observability.tracing import init_tracing
 from app.observability.metrics import init_metrics, metrics_router
-from app.observability.logging import init_logging
+from app.observability.logging import init_logging, get_logger
 from app.middleware.correlation import CorrelationMiddleware
 from app.middleware.tenancy import TenancyMiddleware
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 from app.routes import (
     ingest, exceptions, admin, health, websocket, dashboard, slack, exception_details
 )
