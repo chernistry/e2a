@@ -16,10 +16,12 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import select, func, and_, desc, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from prometheus_client import REGISTRY
+from opentelemetry import trace
 
 from app.storage.db import get_db_session
 from app.storage.models import ExceptionRecord, OrderEvent, Invoice
 from app.services.resilience_manager import get_resilience_manager, ResilienceManager
+from app.services.metrics_collector import DatabaseMetricsCollector
 from app.middleware.tenancy import get_tenant_id
 from app.observability.tracing import get_tracer
 from app.observability.logging import ContextualLogger
@@ -957,3 +959,314 @@ async def get_activity_feed(
             "count": len(activities),
             "timestamp": datetime.utcnow().isoformat() + "Z"
         }
+
+
+# ==== ENHANCED E2E METRICS ENDPOINTS ==== #
+
+
+@router.get("/metrics/e2e")
+async def get_e2e_metrics(
+    request: Request,
+    tenant: str = Depends(get_tenant_id),
+    timeframe_hours: int = Query(1, ge=1, le=168, description="Hours to look back for metrics"),
+    db: AsyncSession = Depends(get_db_session)
+) -> JSONResponse:
+    """
+    Get comprehensive E2E testing metrics.
+    
+    Provides detailed database metrics for validating pipeline effectiveness,
+    including order processing, exception handling, SLA compliance, and flow performance.
+    
+    Args:
+        request: FastAPI request object
+        tenant: Tenant identifier from middleware
+        timeframe_hours: Hours to look back for metrics (1-168 hours)
+        db: Database session dependency
+        
+    Returns:
+        JSONResponse: Comprehensive E2E metrics
+    """
+    with tracer.start_as_current_span("get_e2e_metrics") as span:
+        span.set_attribute("tenant", tenant)
+        span.set_attribute("timeframe_hours", timeframe_hours)
+        
+        logger.info("Collecting E2E metrics", extra={
+            "tenant": tenant,
+            "timeframe_hours": timeframe_hours,
+            "endpoint": "/metrics/e2e"
+        })
+        
+        try:
+            async with DatabaseMetricsCollector() as collector:
+                # Collect all metric types
+                order_metrics = await collector.collect_order_metrics(tenant, timeframe_hours)
+                exception_metrics = await collector.collect_exception_metrics(tenant, timeframe_hours)
+                sla_metrics = await collector.collect_sla_metrics(tenant, timeframe_hours)
+                flow_metrics = await collector.collect_flow_performance_metrics(tenant, timeframe_hours)
+                
+                # Compile comprehensive response
+                e2e_metrics = {
+                    "tenant": tenant,
+                    "timeframe_hours": timeframe_hours,
+                    "collection_timestamp": datetime.utcnow().isoformat(),
+                    "order_processing": order_metrics,
+                    "exception_handling": exception_metrics,
+                    "sla_compliance": sla_metrics,
+                    "flow_performance": flow_metrics,
+                    "summary": {
+                        "orders_created": order_metrics.get("orders_created_count", 0),
+                        "total_exceptions": exception_metrics.get("total_exceptions_analyzed", 0),
+                        "avg_exceptions_per_order": order_metrics.get("average_exceptions_per_order", 0),
+                        "ai_success_rate": exception_metrics.get("ai_analysis_success_rate", 0),
+                        "sla_compliance_rate": sla_metrics.get("sla_compliance_rate", 1.0),
+                        "pipeline_health": "healthy" if (
+                            2.0 <= order_metrics.get("average_exceptions_per_order", 0) <= 5.0 and
+                            exception_metrics.get("ai_analysis_success_rate", 0) >= 0.8 and
+                            sla_metrics.get("sla_compliance_rate", 1.0) >= 0.8
+                        ) else "needs_attention"
+                    }
+                }
+                
+                span.set_attribute("orders_created", order_metrics.get("orders_created_count", 0))
+                span.set_attribute("total_exceptions", exception_metrics.get("total_exceptions_analyzed", 0))
+                span.set_attribute("pipeline_health", e2e_metrics["summary"]["pipeline_health"])
+                
+                logger.info("E2E metrics collected successfully", extra={
+                    "tenant": tenant,
+                    "orders_created": order_metrics.get("orders_created_count", 0),
+                    "total_exceptions": exception_metrics.get("total_exceptions_analyzed", 0),
+                    "pipeline_health": e2e_metrics["summary"]["pipeline_health"]
+                })
+                
+                return JSONResponse(content=e2e_metrics)
+                
+        except Exception as e:
+            logger.error("Failed to collect E2E metrics", extra={
+                "tenant": tenant,
+                "error": str(e)
+            })
+            span.record_exception(e)
+            span.set_status(trace.Status(trace.StatusCode.ERROR, str(e)))
+            
+            return JSONResponse(
+                status_code=500,
+                content={
+                    "error": "Failed to collect E2E metrics",
+                    "details": str(e),
+                    "tenant": tenant,
+                    "timestamp": datetime.utcnow().isoformat()
+                }
+            )
+
+
+@router.get("/metrics/pipeline-health")
+async def get_pipeline_health(
+    request: Request,
+    tenant: str = Depends(get_tenant_id),
+    db: AsyncSession = Depends(get_db_session)
+) -> JSONResponse:
+    """
+    Get pipeline health analysis.
+    
+    Provides comprehensive analysis of pipeline effectiveness including health scoring,
+    performance indicators, and actionable recommendations.
+    
+    Args:
+        request: FastAPI request object
+        tenant: Tenant identifier from middleware
+        db: Database session dependency
+        
+    Returns:
+        JSONResponse: Pipeline health analysis
+    """
+    with tracer.start_as_current_span("get_pipeline_health") as span:
+        span.set_attribute("tenant", tenant)
+        
+        logger.info("Analyzing pipeline health", extra={
+            "tenant": tenant,
+            "endpoint": "/metrics/pipeline-health"
+        })
+        
+        try:
+            async with DatabaseMetricsCollector() as collector:
+                health_analysis = await collector.analyze_pipeline_effectiveness(tenant, 1)
+                
+                # Add additional context
+                health_analysis["analysis_context"] = {
+                    "tenant": tenant,
+                    "analysis_timestamp": datetime.utcnow().isoformat(),
+                    "expected_metrics": {
+                        "exception_rate_range": [2.0, 5.0],
+                        "minimum_ai_success_rate": 0.8,
+                        "minimum_sla_compliance": 0.8
+                    }
+                }
+                
+                span.set_attribute("health_score", health_analysis.get("overall_health_score", 0))
+                span.set_attribute("pipeline_status", health_analysis.get("pipeline_status", "unknown"))
+                
+                logger.info("Pipeline health analysis completed", extra={
+                    "tenant": tenant,
+                    "health_score": health_analysis.get("overall_health_score", 0),
+                    "pipeline_status": health_analysis.get("pipeline_status", "unknown")
+                })
+                
+                return JSONResponse(content=health_analysis)
+                
+        except Exception as e:
+            logger.error("Failed to analyze pipeline health", extra={
+                "tenant": tenant,
+                "error": str(e)
+            })
+            span.record_exception(e)
+            span.set_status(trace.Status(trace.StatusCode.ERROR, str(e)))
+            
+            return JSONResponse(
+                status_code=500,
+                content={
+                    "error": "Failed to analyze pipeline health",
+                    "details": str(e),
+                    "tenant": tenant,
+                    "timestamp": datetime.utcnow().isoformat()
+                }
+            )
+
+
+@router.get("/metrics/architecture-performance")
+async def get_architecture_performance(
+    request: Request,
+    tenant: str = Depends(get_tenant_id),
+    timeframe_hours: int = Query(24, ge=1, le=168, description="Hours to look back for performance analysis"),
+    db: AsyncSession = Depends(get_db_session)
+) -> JSONResponse:
+    """
+    Get architecture performance metrics.
+    
+    Provides detailed analysis of the simplified 2-flow architecture performance,
+    including efficiency metrics, throughput analysis, and optimization recommendations.
+    
+    Args:
+        request: FastAPI request object
+        tenant: Tenant identifier from middleware
+        timeframe_hours: Hours to look back for performance analysis
+        db: Database session dependency
+        
+    Returns:
+        JSONResponse: Architecture performance analysis
+    """
+    with tracer.start_as_current_span("get_architecture_performance") as span:
+        span.set_attribute("tenant", tenant)
+        span.set_attribute("timeframe_hours", timeframe_hours)
+        
+        logger.info("Analyzing architecture performance", extra={
+            "tenant": tenant,
+            "timeframe_hours": timeframe_hours,
+            "endpoint": "/metrics/architecture-performance"
+        })
+        
+        try:
+            async with DatabaseMetricsCollector() as collector:
+                # Collect comprehensive metrics for performance analysis
+                order_metrics = await collector.collect_order_metrics(tenant, timeframe_hours)
+                exception_metrics = await collector.collect_exception_metrics(tenant, timeframe_hours)
+                sla_metrics = await collector.collect_sla_metrics(tenant, timeframe_hours)
+                flow_metrics = await collector.collect_flow_performance_metrics(tenant, timeframe_hours)
+                
+                # Calculate performance indicators
+                orders_processed = order_metrics.get("orders_created_count", 0)
+                total_exceptions = exception_metrics.get("total_exceptions_analyzed", 0)
+                avg_exceptions_per_order = order_metrics.get("average_exceptions_per_order", 0)
+                ai_success_rate = exception_metrics.get("ai_analysis_success_rate", 0)
+                sla_compliance_rate = sla_metrics.get("sla_compliance_rate", 1.0)
+                
+                # Performance scoring
+                throughput_score = min(1.0, orders_processed / (timeframe_hours * 10))  # Assume 10 orders/hour baseline
+                exception_efficiency_score = 1.0 if 2.0 <= avg_exceptions_per_order <= 5.0 else 0.5
+                ai_performance_score = ai_success_rate
+                sla_performance_score = sla_compliance_rate
+                
+                overall_performance_score = (
+                    throughput_score * 0.3 +
+                    exception_efficiency_score * 0.3 +
+                    ai_performance_score * 0.2 +
+                    sla_performance_score * 0.2
+                )
+                
+                # Generate recommendations
+                recommendations = []
+                if throughput_score < 0.7:
+                    recommendations.append("Consider optimizing order processing throughput")
+                if exception_efficiency_score < 0.8:
+                    recommendations.append("Review exception detection logic for optimal rate")
+                if ai_performance_score < 0.8:
+                    recommendations.append("Investigate AI analysis performance issues")
+                if sla_performance_score < 0.8:
+                    recommendations.append("Address SLA compliance issues")
+                
+                if not recommendations:
+                    recommendations.append("Architecture performing optimally")
+                
+                performance_analysis = {
+                    "tenant": tenant,
+                    "timeframe_hours": timeframe_hours,
+                    "analysis_timestamp": datetime.utcnow().isoformat(),
+                    "architecture_type": "simplified_2_flow",
+                    "performance_scores": {
+                        "overall": round(overall_performance_score, 3),
+                        "throughput": round(throughput_score, 3),
+                        "exception_efficiency": round(exception_efficiency_score, 3),
+                        "ai_performance": round(ai_performance_score, 3),
+                        "sla_performance": round(sla_performance_score, 3)
+                    },
+                    "key_metrics": {
+                        "orders_processed": orders_processed,
+                        "total_exceptions": total_exceptions,
+                        "avg_exceptions_per_order": avg_exceptions_per_order,
+                        "ai_success_rate": ai_success_rate,
+                        "sla_compliance_rate": sla_compliance_rate,
+                        "orders_per_hour": round(orders_processed / timeframe_hours, 2) if timeframe_hours > 0 else 0
+                    },
+                    "performance_rating": (
+                        "excellent" if overall_performance_score >= 0.9 else
+                        "good" if overall_performance_score >= 0.7 else
+                        "needs_improvement"
+                    ),
+                    "recommendations": recommendations,
+                    "detailed_metrics": {
+                        "order_processing": order_metrics,
+                        "exception_handling": exception_metrics,
+                        "sla_compliance": sla_metrics,
+                        "flow_performance": flow_metrics
+                    }
+                }
+                
+                span.set_attribute("overall_performance_score", overall_performance_score)
+                span.set_attribute("performance_rating", performance_analysis["performance_rating"])
+                span.set_attribute("orders_processed", orders_processed)
+                
+                logger.info("Architecture performance analysis completed", extra={
+                    "tenant": tenant,
+                    "overall_performance_score": overall_performance_score,
+                    "performance_rating": performance_analysis["performance_rating"],
+                    "orders_processed": orders_processed
+                })
+                
+                return JSONResponse(content=performance_analysis)
+                
+        except Exception as e:
+            logger.error("Failed to analyze architecture performance", extra={
+                "tenant": tenant,
+                "error": str(e)
+            })
+            span.record_exception(e)
+            span.set_status(trace.Status(trace.StatusCode.ERROR, str(e)))
+            
+            return JSONResponse(
+                status_code=500,
+                content={
+                    "error": "Failed to analyze architecture performance",
+                    "details": str(e),
+                    "tenant": tenant,
+                    "timestamp": datetime.utcnow().isoformat()
+                }
+            )

@@ -44,7 +44,15 @@ async def analyze_order_events(
         Analysis results with counts and metrics
     """
     logger = get_run_logger()
-    logger.info(f"Analyzing order events for tenant {tenant}")
+    start_time = datetime.utcnow()
+    correlation_id = f"batch_{int(start_time.timestamp())}"
+    
+    logger.info("Order analysis batch started", extra={
+        "tenant": tenant,
+        "lookback_hours": lookback_hours,
+        "batch_id": correlation_id,
+        "start_time": start_time.isoformat()
+    })
     
     async with get_session() as db:
         # Find recent order_created events that need analysis
@@ -61,11 +69,22 @@ async def analyze_order_events(
         result = await db.execute(query)
         events = result.scalars().all()
         
+        logger.info("Events discovered for analysis", extra={
+            "tenant": tenant,
+            "events_found": len(events),
+            "batch_id": correlation_id,
+            "cutoff_time": cutoff_time.isoformat()
+        })
+        
         analyzer = get_order_analyzer()
         processed_count = 0
         exceptions_created = 0
+        skipped_count = 0
+        error_count = 0
         
         for event in events:
+            order_start_time = datetime.utcnow()
+            
             try:
                 # Check if already processed (has exceptions)
                 existing_exceptions = await db.execute(
@@ -79,10 +98,17 @@ async def analyze_order_events(
                 )
                 
                 if existing_exceptions.scalars().first():
+                    skipped_count += 1
+                    logger.debug("Order already processed, skipping", extra={
+                        "order_id": event.order_id,
+                        "tenant": tenant,
+                        "batch_id": correlation_id
+                    })
                     continue  # Already processed
                 
                 # Analyze order for problems
                 problems = await analyzer.analyze_order(event.payload)
+                exceptions_created_for_order = 0
                 
                 # Create exceptions for detected problems
                 for problem in problems:
@@ -104,19 +130,61 @@ async def analyze_order_events(
                     # Trigger AI analysis asynchronously
                     await analyze_exception_or_fallback(db, exception)
                     exceptions_created += 1
+                    exceptions_created_for_order += 1
                 
                 processed_count += 1
+                processing_time = (datetime.utcnow() - order_start_time).total_seconds()
+                
+                logger.info("Order processed successfully", extra={
+                    "order_id": event.order_id,
+                    "tenant": tenant,
+                    "batch_id": correlation_id,
+                    "event_type": event.event_type,
+                    "problems_detected": len(problems),
+                    "exceptions_created": exceptions_created_for_order,
+                    "processing_time_seconds": round(processing_time, 3)
+                })
                 
             except Exception as e:
-                logger.error(f"Failed to process event {event.event_id}: {e}")
+                error_count += 1
+                processing_time = (datetime.utcnow() - order_start_time).total_seconds()
+                
+                logger.error("Failed to process order event", extra={
+                    "order_id": event.order_id,
+                    "event_id": event.event_id,
+                    "tenant": tenant,
+                    "batch_id": correlation_id,
+                    "error": str(e),
+                    "processing_time_seconds": round(processing_time, 3)
+                })
                 continue
         
         await db.commit()
         
+        total_processing_time = (datetime.utcnow() - start_time).total_seconds()
+        success_rate = processed_count / len(events) if len(events) > 0 else 0
+        
+        logger.info("Order analysis batch completed", extra={
+            "tenant": tenant,
+            "batch_id": correlation_id,
+            "events_processed": processed_count,
+            "events_skipped": skipped_count,
+            "events_failed": error_count,
+            "exceptions_created": exceptions_created,
+            "success_rate": round(success_rate, 3),
+            "processing_time_seconds": round(total_processing_time, 2),
+            "avg_exceptions_per_order": round(exceptions_created / processed_count, 2) if processed_count > 0 else 0
+        })
+        
         return {
             "events_processed": processed_count,
             "exceptions_created": exceptions_created,
-            "total_events_found": len(events)
+            "total_events_found": len(events),
+            "events_skipped": skipped_count,
+            "events_failed": error_count,
+            "success_rate": success_rate,
+            "processing_time_seconds": total_processing_time,
+            "batch_id": correlation_id
         }
 
 
@@ -136,7 +204,15 @@ async def process_sla_evaluations(
         SLA evaluation results
     """
     logger = get_run_logger()
-    logger.info(f"Processing SLA evaluations for tenant {tenant}")
+    start_time = datetime.utcnow()
+    correlation_id = f"sla_batch_{int(start_time.timestamp())}"
+    
+    logger.info("SLA evaluation batch started", extra={
+        "tenant": tenant,
+        "lookback_hours": lookback_hours,
+        "batch_id": correlation_id,
+        "start_time": start_time.isoformat()
+    })
     
     async with get_session() as db:
         cutoff_time = datetime.utcnow() - timedelta(hours=lookback_hours)
@@ -158,14 +234,35 @@ async def process_sla_evaluations(
         result = await db.execute(query)
         events = result.scalars().all()
         
-        sla_breaches = 0
+        logger.info("SLA events discovered for evaluation", extra={
+            "tenant": tenant,
+            "events_found": len(events),
+            "event_types": sla_event_types,
+            "batch_id": correlation_id,
+            "cutoff_time": cutoff_time.isoformat()
+        })
+        
+        sla_breaches_detected = 0
         processed_orders = set()
+        evaluation_errors = 0
         
         for event in events:
             if event.order_id in processed_orders:
                 continue
                 
+            order_start_time = datetime.utcnow()
+            
             try:
+                # Count existing SLA breaches for this order before evaluation
+                pre_breach_query = select(func.count(ExceptionRecord.id)).where(
+                    and_(
+                        ExceptionRecord.tenant == tenant,
+                        ExceptionRecord.order_id == event.order_id,
+                        ExceptionRecord.reason_code.like("SLA_%")
+                    )
+                )
+                pre_breach_count = await db.scalar(pre_breach_query) or 0
+                
                 # Evaluate SLA for this order
                 await evaluate_sla(
                     db=db,
@@ -174,14 +271,48 @@ async def process_sla_evaluations(
                     correlation_id=event.correlation_id
                 )
                 
+                # Count SLA breaches after evaluation
+                post_breach_query = select(func.count(ExceptionRecord.id)).where(
+                    and_(
+                        ExceptionRecord.tenant == tenant,
+                        ExceptionRecord.order_id == event.order_id,
+                        ExceptionRecord.reason_code.like("SLA_%")
+                    )
+                )
+                post_breach_count = await db.scalar(post_breach_query) or 0
+                
+                new_breaches = post_breach_count - pre_breach_count
+                sla_breaches_detected += new_breaches
+                
+                processing_time = (datetime.utcnow() - order_start_time).total_seconds()
+                
+                logger.info("SLA evaluation completed for order", extra={
+                    "order_id": event.order_id,
+                    "tenant": tenant,
+                    "batch_id": correlation_id,
+                    "event_type": event.event_type,
+                    "sla_breaches_detected": new_breaches,
+                    "total_sla_breaches": post_breach_count,
+                    "processing_time_seconds": round(processing_time, 3)
+                })
+                
                 processed_orders.add(event.order_id)
                 
             except Exception as e:
-                logger.error(f"SLA evaluation failed for order {event.order_id}: {e}")
+                evaluation_errors += 1
+                processing_time = (datetime.utcnow() - order_start_time).total_seconds()
+                
+                logger.error("SLA evaluation failed for order", extra={
+                    "order_id": event.order_id,
+                    "tenant": tenant,
+                    "batch_id": correlation_id,
+                    "error": str(e),
+                    "processing_time_seconds": round(processing_time, 3)
+                })
                 continue
         
-        # Count recent SLA breaches
-        breach_query = select(func.count(ExceptionRecord.id)).where(
+        # Count total recent SLA breaches for summary
+        total_breach_query = select(func.count(ExceptionRecord.id)).where(
             and_(
                 ExceptionRecord.tenant == tenant,
                 ExceptionRecord.reason_code.like("SLA_%"),
@@ -189,7 +320,32 @@ async def process_sla_evaluations(
             )
         )
         
-        breach_result = await db.execute(breach_query)
+        total_breaches = await db.scalar(total_breach_query) or 0
+        
+        total_processing_time = (datetime.utcnow() - start_time).total_seconds()
+        success_rate = len(processed_orders) / len(events) if len(events) > 0 else 0
+        
+        logger.info("SLA evaluation batch completed", extra={
+            "tenant": tenant,
+            "batch_id": correlation_id,
+            "orders_evaluated": len(processed_orders),
+            "sla_breaches_detected": sla_breaches_detected,
+            "total_sla_breaches_in_period": total_breaches,
+            "evaluation_errors": evaluation_errors,
+            "success_rate": round(success_rate, 3),
+            "processing_time_seconds": round(total_processing_time, 2),
+            "avg_breaches_per_order": round(sla_breaches_detected / len(processed_orders), 2) if len(processed_orders) > 0 else 0
+        })
+        
+        return {
+            "orders_evaluated": len(processed_orders),
+            "sla_breaches_detected": sla_breaches_detected,
+            "total_sla_breaches_in_period": total_breaches,
+            "evaluation_errors": evaluation_errors,
+            "success_rate": success_rate,
+            "processing_time_seconds": total_processing_time,
+            "batch_id": correlation_id
+        }
         sla_breaches = breach_result.scalar() or 0
         
         return {
@@ -300,38 +456,136 @@ async def event_processor_flow(
         Comprehensive processing results
     """
     logger = get_run_logger()
-    logger.info(f"Starting event processor flow for tenant {tenant}")
+    flow_start_time = datetime.utcnow()
+    flow_correlation_id = f"event_processor_{int(flow_start_time.timestamp())}"
+    
+    logger.info("Event processor flow started", extra={
+        "tenant": tenant,
+        "lookback_hours": lookback_hours,
+        "enable_ai_processing": enable_ai_processing,
+        "flow_correlation_id": flow_correlation_id,
+        "start_time": flow_start_time.isoformat()
+    })
     
     # Phase 1: Order Analysis and Exception Detection
+    phase1_start = datetime.utcnow()
+    logger.info("Starting Phase 1: Order Analysis", extra={
+        "tenant": tenant,
+        "flow_correlation_id": flow_correlation_id,
+        "phase": "order_analysis"
+    })
+    
     order_analysis = await analyze_order_events(tenant, lookback_hours)
+    phase1_duration = (datetime.utcnow() - phase1_start).total_seconds()
+    
+    logger.info("Phase 1 completed", extra={
+        "tenant": tenant,
+        "flow_correlation_id": flow_correlation_id,
+        "phase": "order_analysis",
+        "duration_seconds": round(phase1_duration, 2),
+        "events_processed": order_analysis.get("events_processed", 0),
+        "exceptions_created": order_analysis.get("exceptions_created", 0)
+    })
     
     # Phase 2: SLA Evaluation
+    phase2_start = datetime.utcnow()
+    logger.info("Starting Phase 2: SLA Evaluation", extra={
+        "tenant": tenant,
+        "flow_correlation_id": flow_correlation_id,
+        "phase": "sla_evaluation"
+    })
+    
     sla_evaluation = await process_sla_evaluations(tenant, lookback_hours)
+    phase2_duration = (datetime.utcnow() - phase2_start).total_seconds()
+    
+    logger.info("Phase 2 completed", extra={
+        "tenant": tenant,
+        "flow_correlation_id": flow_correlation_id,
+        "phase": "sla_evaluation",
+        "duration_seconds": round(phase2_duration, 2),
+        "orders_evaluated": sla_evaluation.get("orders_evaluated", 0),
+        "sla_breaches_detected": sla_evaluation.get("sla_breaches_detected", 0)
+    })
     
     # Phase 3: AI Analysis (if enabled)
     ai_processing = {}
-    if enable_ai_processing:
-        ai_processing = await process_ai_analysis_queue(tenant)
+    phase3_duration = 0
     
-    # Compile results
+    if enable_ai_processing:
+        phase3_start = datetime.utcnow()
+        logger.info("Starting Phase 3: AI Processing", extra={
+            "tenant": tenant,
+            "flow_correlation_id": flow_correlation_id,
+            "phase": "ai_processing"
+        })
+        
+        ai_processing = await process_ai_analysis_queue(tenant)
+        phase3_duration = (datetime.utcnow() - phase3_start).total_seconds()
+        
+        logger.info("Phase 3 completed", extra={
+            "tenant": tenant,
+            "flow_correlation_id": flow_correlation_id,
+            "phase": "ai_processing",
+            "duration_seconds": round(phase3_duration, 2),
+            "exceptions_processed": ai_processing.get("exceptions_processed", 0),
+            "ai_success_rate": ai_processing.get("success_rate", 0)
+        })
+    else:
+        logger.info("Phase 3 skipped - AI processing disabled", extra={
+            "tenant": tenant,
+            "flow_correlation_id": flow_correlation_id,
+            "phase": "ai_processing"
+        })
+    
+    # Calculate total metrics
+    total_flow_duration = (datetime.utcnow() - flow_start_time).total_seconds()
+    total_events_processed = (
+        order_analysis.get("events_processed", 0) + 
+        sla_evaluation.get("orders_evaluated", 0)
+    )
+    total_exceptions_created = order_analysis.get("exceptions_created", 0)
+    total_sla_breaches = sla_evaluation.get("sla_breaches_detected", 0)
+    
+    # Compile comprehensive results
     results = {
         "tenant": tenant,
+        "flow_correlation_id": flow_correlation_id,
         "processing_timestamp": datetime.utcnow().isoformat(),
+        "configuration": {
+            "lookback_hours": lookback_hours,
+            "enable_ai_processing": enable_ai_processing
+        },
         "order_analysis": order_analysis,
         "sla_evaluation": sla_evaluation,
         "ai_processing": ai_processing,
+        "performance_metrics": {
+            "total_duration_seconds": round(total_flow_duration, 2),
+            "phase1_duration_seconds": round(phase1_duration, 2),
+            "phase2_duration_seconds": round(phase2_duration, 2),
+            "phase3_duration_seconds": round(phase3_duration, 2),
+            "events_per_second": round(total_events_processed / total_flow_duration, 2) if total_flow_duration > 0 else 0
+        },
         "summary": {
-            "total_events_processed": (
-                order_analysis.get("events_processed", 0) + 
-                sla_evaluation.get("orders_evaluated", 0)
-            ),
-            "exceptions_created": order_analysis.get("exceptions_created", 0),
-            "sla_breaches": sla_evaluation.get("sla_breaches_detected", 0),
-            "ai_success_rate": ai_processing.get("success_rate", 0)
+            "total_events_processed": total_events_processed,
+            "exceptions_created": total_exceptions_created,
+            "sla_breaches": total_sla_breaches,
+            "ai_success_rate": ai_processing.get("success_rate", 0),
+            "avg_exceptions_per_event": round(total_exceptions_created / total_events_processed, 2) if total_events_processed > 0 else 0,
+            "overall_success": True  # Flow completed successfully
         }
     }
     
-    logger.info(f"Event processor flow completed: {results['summary']}")
+    logger.info("Event processor flow completed successfully", extra={
+        "tenant": tenant,
+        "flow_correlation_id": flow_correlation_id,
+        "total_duration_seconds": round(total_flow_duration, 2),
+        "total_events_processed": total_events_processed,
+        "exceptions_created": total_exceptions_created,
+        "sla_breaches_detected": total_sla_breaches,
+        "ai_processing_enabled": enable_ai_processing,
+        "performance_rating": "excellent" if total_flow_duration < 60 else "good" if total_flow_duration < 120 else "needs_optimization"
+    })
+    
     return results
 
 
