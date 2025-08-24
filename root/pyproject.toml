@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "SLA Radar + Invoice Guard with AI Exception Analyst"
 authors = ["Octup Team <team@octup.ai>"]
 readme = "README.md"
+package-mode = false
 
 [tool.poetry.dependencies]
 python = "^3.11"
@@ -18,6 +19,7 @@ redis = "^5.1.0"
 httpx = "^0.27.0"
 tenacity = "^9.0.0"
 python-json-logger = "^2.0.7"
+loguru = "^0.7.2"
 prometheus-client = "^0.21.0"
 opentelemetry-sdk = "^1.27.0"
 opentelemetry-instrumentation-fastapi = "^0.48b0"
