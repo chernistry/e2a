@@ -815,6 +815,54 @@ export LOG_LEVEL=INFO
 
 ### Common Issues
 
+#### Prefect Deployment Container Path Issues
+
+**Problem**: Prefect flows crash with `FileNotFoundError: [Errno 2] No such file or directory: '/Users/sasha/IdeaProjects/octup/root'`
+
+**Root Cause**: Prefect worker runs in Docker container but tries to access local host paths instead of container paths.
+
+**Solution**: Always include proper `pull` steps in `prefect.yaml` to set working directory to `/app`:
+
+```yaml
+# ✅ CORRECT - Container-compatible prefect.yaml
+name: octup-flows
+prefect-version: 3.0.0
+
+build: null
+push: null
+pull:
+  - prefect.deployments.steps.set_working_directory:
+      directory: /app  # Container path, not host path
+
+deployments:
+  - name: my-flow
+    entrypoint: flows/my_flow.py:my_flow_function  # Relative path
+    work_pool:
+      name: octup-process-pool
+      job_variables:
+        env:
+          PYTHONPATH: /app
+```
+
+**❌ WRONG - Will cause crashes:**
+```yaml
+# Missing pull steps - worker can't find files
+pull: null
+
+# Or absolute host paths in entrypoint
+entrypoint: /Users/sasha/IdeaProjects/octup/root/flows/my_flow.py:my_flow_function
+```
+
+**Key Points**:
+- Prefect worker runs in `octup-process-pool` container
+- Container working directory must be `/app` (where code is mounted)
+- Use relative paths in entrypoints: `flows/my_flow.py:function`
+- Always set `PYTHONPATH: /app` in job variables
+
+---
+
+### Common Issues
+
 #### Resolution tracking not working:
 ```bash
 # Check migration applied

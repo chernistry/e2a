@@ -1,78 +1,40 @@
-# Prefect deployment configuration for Octup orchestration flows
+# Prefect deployment configuration for Octup simplified flows
 name: octup-flows
 prefect-version: 3.0.0
 
 # Docker environment - code mounted via volumes
 build: null
 push: null
-pull: null
+pull:
+  - prefect.deployments.steps.set_working_directory:
+      directory: /app
 
-# Working deployments using octup-process-pool
+# Simplified deployments using octup-process-pool
 deployments:
-  # Order processing pipeline
-  - name: order-processing-final
-    entrypoint: /app/flows/order_processing_flow.py:order_processing_pipeline
+  # Event processor - real-time event processing
+  - name: event-processor-final
+    entrypoint: flows/event_processor_flow.py:event_processor_flow
+    parameters:
+      tenant: demo-3pl
+      lookback_hours: 1
+      enable_ai_processing: true
+    schedule:
+      interval: 900  # Every 15 minutes for near real-time processing
+    work_pool:
+      name: octup-process-pool
+      job_variables:
+        env:
+          PYTHONPATH: /app
+
+  # Business operations - daily business processes
+  - name: business-operations-final
+    entrypoint: flows/business_operations_flow.py:business_operations_flow
     parameters:
       tenant: demo-3pl
       lookback_hours: 24
-      enable_processing_stages: true
-    schedule:
-      interval: 1800  # Every 30 minutes
-    work_pool:
-      name: octup-process-pool
-      job_variables:
-        env:
-          PYTHONPATH: /app
-
-  # Business orchestrator pipeline
-  - name: business-orchestrator-final
-    entrypoint: /app/flows/business_operations_orchestrator.py:business_operations_orchestrator
-    parameters:
-      tenant: demo-3pl
-    schedule:
-      interval: 3600  # Every hour
-    work_pool:
-      name: octup-process-pool
-      job_variables:
-        env:
-          PYTHONPATH: /app
-
-  # Exception management pipeline
-  - name: exception-management-final
-    entrypoint: /app/flows/exception_management_flow.py:exception_management_pipeline
-    parameters:
-      tenant: demo-3pl
-      analysis_hours: 168  # 1 week for pattern analysis
-    schedule:
-      interval: 14400  # Every 4 hours
-    work_pool:
-      name: octup-process-pool
-      job_variables:
-        env:
-          PYTHONPATH: /app
-
-  # Billing management pipeline
-  - name: billing-management-final
-    entrypoint: /app/flows/billing_management_flow.py:billing_management_pipeline
-    parameters:
-      tenant: demo-3pl
-      lookback_hours: 24
+      enable_billing: true
     schedule:
       interval: 86400  # Daily
-    work_pool:
-      name: octup-process-pool
-      job_variables:
-        env:
-          PYTHONPATH: /app
-
-  # Data enrichment pipeline
-  - name: data-enrichment-final
-    entrypoint: /app/flows/data_enrichment_flow.py:data_enrichment_flow
-    parameters:
-      tenant: demo-3pl
-      force_reprocessing: false
-    schedule:
-      interval: 21600  # Every 6 hours
     work_pool:
       name: octup-process-pool
       job_variables:

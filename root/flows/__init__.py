@@ -1,34 +1,21 @@
 # ==== PREFECT FLOWS PACKAGE ==== #
 
 """
-Modern Prefect flows for Octup E²A business operations.
+Simplified Prefect flows for Octup E²A business operations.
 
-This package contains realistic business process flows that work with
-webhook-driven architecture:
+This package contains consolidated business process flows:
 
-- order_processing_flow: End-to-end order fulfillment monitoring
-- exception_management_flow: Proactive exception handling and resolution
-- billing_management_flow: Comprehensive invoice generation and validation
-- business_operations_orchestrator: Master coordination of all processes
+- event_processor_flow: Real-time event processing with AI analysis
+- business_operations_flow: Daily business operations and billing
 
-These flows replace the old event streaming approach with realistic
-business processes that respond to webhook events from Shopify Mock.
+These flows replace the fragmented approach with streamlined,
+Prefect-native patterns for better performance and maintainability.
 """
 
-from .order_processing_flow import order_processing_pipeline
-from .exception_management_flow import exception_management_pipeline
-from .billing_management_flow import billing_management_pipeline
-from .business_operations_orchestrator import (
-    business_operations_orchestrator,
-    hourly_operations,
-    daily_operations
-)
+from .event_processor_flow import event_processor_flow
+from .business_operations_flow import business_operations_flow
 
 __all__ = [
-    "order_processing_pipeline",
-    "exception_management_pipeline", 
-    "billing_management_pipeline",
-    "business_operations_orchestrator",
-    "hourly_operations",
-    "daily_operations"
+    "event_processor_flow",
+    "business_operations_flow"
 ]

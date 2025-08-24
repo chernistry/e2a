@@ -150,11 +150,10 @@ async def ingest_events_raw(
                     analyzer = get_order_analyzer()
                     problems = await analyzer.analyze_order(event_data)
                     
-                    # Create exceptions for detected problems
+                    # Create exceptions for detected problems (without immediate AI analysis)
                     for problem in problems:
                         try:
                             from app.storage.models import ExceptionRecord
-                            from app.services.ai_exception_analyst import analyze_exception_or_fallback
                             
                             exception = ExceptionRecord(
                                 tenant=tenant,
@@ -163,7 +162,7 @@ async def ingest_events_raw(
                                 status="OPEN",
                                 severity=problem["severity"],
                                 correlation_id=correlation_id,
-                                max_resolution_attempts=3,  # Fix: Add required field with default value
+                                max_resolution_attempts=3,
                                 context_data={
                                     "customer_name": event_data.get("data", {}).get("order", {}).get("customer", {}).get("first_name", "") + " " + 
                                                    event_data.get("data", {}).get("order", {}).get("customer", {}).get("last_name", ""),
@@ -179,10 +178,6 @@ async def ingest_events_raw(
                             )
                             
                             db.add(exception)
-                            await db.flush()
-                            
-                            # Trigger AI analysis
-                            await analyze_exception_or_fallback(db, exception)
                             
                             span.set_attribute("problem_detected", True)
                             span.set_attribute("problem_type", problem["reason_code"])
@@ -195,7 +190,9 @@ async def ingest_events_raw(
                             logger.error(f"Failed to create exception for problem {problem.get('reason_code', 'unknown')}: {exc_error}", 
                                        extra={"order_id": order_id, "tenant": tenant, "correlation_id": correlation_id})
                             print(f"Warning: Failed to create exception for problem {problem.get('reason_code', 'unknown')}: {exc_error}")
-                            
+                    
+                    # Note: AI analysis will be handled by the event_processor_flow asynchronously
+                    
                 except Exception as analysis_error:
                     # Log analysis error but don't fail the ingestion
                     span.record_exception(analysis_error)

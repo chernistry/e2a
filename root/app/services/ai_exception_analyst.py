@@ -4,12 +4,14 @@
 AI Exception Analyst service for generating exception narratives.
 
 This module provides comprehensive AI-powered exception analysis
-with intelligent fallback mechanisms, Redis caching, and PII redaction
-for secure and reliable exception handling across all tenants.
+with circuit breaker pattern, intelligent fallback mechanisms, 
+Redis caching, and PII redaction for secure and reliable exception 
+handling across all tenants.
 """
 
 import hashlib
 import json
+import time
 from typing import Dict, Any, Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -30,6 +32,94 @@ tracer = get_tracer(__name__)
 CACHE_TTL_SECONDS = 3600  # 1 hour
 CACHE_KEY_PREFIX = "ai_analysis:"
 
+# Circuit breaker configuration
+CIRCUIT_BREAKER_FAILURE_THRESHOLD = 5
+CIRCUIT_BREAKER_TIMEOUT = 300  # 5 minutes
+CIRCUIT_BREAKER_KEY = "ai_circuit_breaker"
+
+
+class AICircuitBreaker:
+    """Circuit breaker for AI service calls."""
+    
+    def __init__(self, redis_client=None):
+        self.redis = redis_client or get_redis_client()
+        self.failure_threshold = CIRCUIT_BREAKER_FAILURE_THRESHOLD
+        self.timeout = CIRCUIT_BREAKER_TIMEOUT
+        
+    async def is_open(self) -> bool:
+        """Check if circuit breaker is open (blocking calls)."""
+        try:
+            breaker_data = await self.redis.get(CIRCUIT_BREAKER_KEY)
+            if not breaker_data:
+                return False
+                
+            data = json.loads(breaker_data)
+            
+            # Check if timeout has passed
+            if time.time() - data.get("opened_at", 0) > self.timeout:
+                await self.redis.delete(CIRCUIT_BREAKER_KEY)
+                return False
+                
+            return data.get("state") == "open"
+            
+        except Exception:
+            return False  # Fail safe - allow calls if Redis is down
+    
+    async def record_success(self) -> None:
+        """Record successful AI call."""
+        try:
+            await self.redis.delete(CIRCUIT_BREAKER_KEY)
+        except Exception:
+            pass  # Ignore Redis errors
+    
+    async def record_failure(self) -> None:
+        """Record failed AI call and potentially open circuit."""
+        try:
+            breaker_data = await self.redis.get(CIRCUIT_BREAKER_KEY)
+            
+            if breaker_data:
+                data = json.loads(breaker_data)
+                failure_count = data.get("failure_count", 0) + 1
+            else:
+                failure_count = 1
+            
+            if failure_count >= self.failure_threshold:
+                # Open circuit breaker
+                await self.redis.setex(
+                    CIRCUIT_BREAKER_KEY,
+                    self.timeout,
+                    json.dumps({
+                        "state": "open",
+                        "failure_count": failure_count,
+                        "opened_at": time.time()
+                    })
+                )
+            else:
+                # Update failure count
+                await self.redis.setex(
+                    CIRCUIT_BREAKER_KEY,
+                    60,  # Short TTL for failure tracking
+                    json.dumps({
+                        "state": "closed",
+                        "failure_count": failure_count
+                    })
+                )
+                
+        except Exception:
+            pass  # Ignore Redis errors
+
+
+# Global circuit breaker instance
+_circuit_breaker = None
+
+
+def get_circuit_breaker() -> AICircuitBreaker:
+    """Get circuit breaker instance."""
+    global _circuit_breaker
+    if _circuit_breaker is None:
+        _circuit_breaker = AICircuitBreaker()
+    return _circuit_breaker
+
 
 # ==== MAIN ANALYSIS FUNCTION ==== #
 
@@ -41,8 +131,9 @@ async def analyze_exception_or_fallback(
     """
     Analyze exception with AI or use fallback logic.
     
-    Implements intelligent exception analysis with AI integration
-    and comprehensive fallback mechanisms for operational reliability.
+    Implements intelligent exception analysis with AI integration,
+    circuit breaker protection, and comprehensive fallback mechanisms 
+    for operational reliability.
     
     Args:
         db (AsyncSession): Database session for persistence
@@ -141,10 +232,11 @@ async def analyze_exception_or_fallback(
 
 async def _try_ai_analysis(exception: ExceptionRecord) -> Optional[Dict[str, Any]]:
     """
-    Try to analyze exception using AI.
+    Try to analyze exception using AI with circuit breaker protection.
     
-    Attempts AI-powered exception analysis with comprehensive
-    Redis caching and error handling for optimal performance and reliability.
+    Attempts AI-powered exception analysis with circuit breaker pattern,
+    comprehensive Redis caching and error handling for optimal performance 
+    and reliability.
     
     Args:
         exception (ExceptionRecord): Exception record to analyze
@@ -153,6 +245,12 @@ async def _try_ai_analysis(exception: ExceptionRecord) -> Optional[Dict[str, Any
         Optional[Dict[str, Any]]: AI analysis result or None if failed
     """
     print(f"🔍 Attempting AI analysis for exception {exception.id}")
+    
+    # Check circuit breaker first
+    circuit_breaker = get_circuit_breaker()
+    if await circuit_breaker.is_open():
+        print(f"🚫 Circuit breaker is open, skipping AI analysis for exception {exception.id}")
+        return None
     
     try:
         # Check Redis cache first
@@ -185,6 +283,9 @@ async def _try_ai_analysis(exception: ExceptionRecord) -> Optional[Dict[str, Any
         result = await ai_client.classify_exception(context)
         print(f"✅ AI analysis result for {exception.id}: {result}")
         
+        # Record success with circuit breaker
+        await circuit_breaker.record_success()
+        
         # Cache the result in Redis
         try:
             redis_client = await get_redis_client()
@@ -200,6 +301,10 @@ async def _try_ai_analysis(exception: ExceptionRecord) -> Optional[Dict[str, Any
         return result
         
     except Exception as e:
+        # Record failure with circuit breaker
+        circuit_breaker = get_circuit_breaker()
+        await circuit_breaker.record_failure()
+        
         # Log error but don't fail - fallback will handle
         print(f"❌ AI analysis failed for exception {exception.id}: {type(e).__name__}: {e}")
         
