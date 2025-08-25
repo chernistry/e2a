@@ -5,12 +5,14 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from datetime import datetime, timedelta, timezone
 from typing import Dict, Any
 
-from flows.event_processor_flow import (
-    analyze_order_events,
-    process_sla_evaluations,
-    process_ai_analysis_queue,
-    event_processor_flow
-)
+# Mock Prefect before importing the flow module
+with patch('prefect.task'), patch('prefect.flow'), patch('prefect.get_run_logger'):
+    from flows.event_processor_flow import (
+        analyze_order_events,
+        process_sla_evaluations,
+        process_ai_analysis_queue,
+        event_processor_flow
+    )
 
 
 @pytest.mark.unit
@@ -173,8 +175,7 @@ class TestEventProcessorFlow:
             mock_ai.return_value = {"analyses_completed": 0}
             
             result = await event_processor_flow(
-                tenant="test-tenant",
-                correlation_id="test-correlation-123"
+                tenant="test-tenant"
             )
             
             # Should complete successfully

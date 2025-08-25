@@ -19,9 +19,9 @@ class TestDatabaseMetricsCollector:
             mock_db = AsyncMock()
             mock_session.return_value.__aenter__.return_value = mock_db
             
-            collector = DatabaseMetricsCollector(tenant="test-tenant")
+            collector = DatabaseMetricsCollector()
             
-            assert collector.tenant == "test-tenant"
+            assert collector.session is None
 
     @pytest.mark.asyncio
     async def test_collector_basic_functionality(self):
@@ -31,11 +31,11 @@ class TestDatabaseMetricsCollector:
             mock_db = AsyncMock()
             mock_session.return_value.__aenter__.return_value = mock_db
             
-            collector = DatabaseMetricsCollector(tenant="test-tenant")
+            collector = DatabaseMetricsCollector()
             
             # Test that collector can be instantiated and has basic attributes
-            assert hasattr(collector, 'tenant')
-            assert collector.tenant == "test-tenant"
+            assert hasattr(collector, 'session')
+            assert collector.session is None
 
 
 @pytest.mark.unit
@@ -52,7 +52,7 @@ class TestMetricsIntegration:
             mock_collector_class.return_value = mock_collector
             
             # Test basic instantiation
-            collector = DatabaseMetricsCollector(tenant="test-tenant")
+            collector = DatabaseMetricsCollector()
             
             assert collector is not None
 

@@ -104,8 +104,7 @@ class TestResilienceIntegration:
         valid_config = CircuitBreakerConfig(
             failure_threshold=5,
             recovery_timeout=30.0,
-            success_threshold=3,
-            timeout=10.0
+            success_threshold=3
         )
         
         circuit_breaker = CircuitBreaker("test_service", valid_config)
@@ -195,8 +194,7 @@ class TestHealthChecking:
         config = CircuitBreakerConfig(
             failure_threshold=2,
             recovery_timeout=1.0,
-            success_threshold=2,
-            timeout=1.0
+            success_threshold=2
         )
         
         circuit_breaker = CircuitBreaker("test_service", config)

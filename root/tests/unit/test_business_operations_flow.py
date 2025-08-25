@@ -5,16 +5,32 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Dict, Any
+import sys
 
-from flows.business_operations_flow import (
-    monitor_order_fulfillment,
-    identify_billable_orders,
-    generate_invoices,
-    validate_invoices,
-    process_billing_adjustments,
-    generate_business_metrics,
-    business_operations_flow
-)
+
+def reload_flow_module():
+    """Helper to reload flow module with mocked Prefect decorators."""
+    if 'flows.business_operations_flow' in sys.modules:
+        del sys.modules['flows.business_operations_flow']
+    
+    with patch('prefect.task', lambda *args, **kwargs: lambda f: f), \
+         patch('prefect.flow', lambda *args, **kwargs: lambda f: f), \
+         patch('prefect.get_run_logger', lambda: MagicMock()):
+        import flows.business_operations_flow
+        return flows.business_operations_flow
+
+
+# Mock Prefect before importing the flow module
+with patch('prefect.task'), patch('prefect.flow'), patch('prefect.get_run_logger'):
+    from flows.business_operations_flow import (
+        monitor_order_fulfillment,
+        identify_billable_orders,
+        generate_invoices,
+        validate_invoices,
+        process_billing_adjustments,
+        generate_business_metrics,
+        business_operations_flow
+    )
 
 
 @pytest.mark.unit
@@ -24,7 +40,11 @@ class TestBusinessOperationsFlow:
     @pytest.mark.asyncio
     async def test_monitor_order_fulfillment_success(self):
         """Test successful order fulfillment monitoring."""
-        with patch('flows.business_operations_flow.get_session') as mock_session:
+        with patch('flows.business_operations_flow.get_session') as mock_session, \
+             patch('flows.business_operations_flow.get_run_logger') as mock_logger:
+            
+            # Mock logger
+            mock_logger.return_value = MagicMock()
             
             # Mock database session
             mock_db = AsyncMock()
@@ -37,14 +57,21 @@ class TestBusinessOperationsFlow:
                 ("order-3", "stalled", 180)
             ]
             
-            result = await monitor_order_fulfillment(tenant="test-tenant", lookback_hours=24)
+            # Import and test the actual function logic
+            flow_module = reload_flow_module()
+            
+            result = await flow_module.monitor_order_fulfillment(tenant="test-tenant", lookback_hours=24)
             
             assert "orders_monitored" in result or "fulfillment_status" in result
 
     @pytest.mark.asyncio
     async def test_identify_billable_orders_success(self):
         """Test successful billable order identification."""
-        with patch('flows.business_operations_flow.get_session') as mock_session:
+        with patch('flows.business_operations_flow.get_session') as mock_session, \
+             patch('flows.business_operations_flow.get_run_logger') as mock_logger:
+            
+            # Mock logger
+            mock_logger.return_value = MagicMock()
             
             # Mock database session
             mock_db = AsyncMock()
@@ -58,32 +85,50 @@ class TestBusinessOperationsFlow:
             
             mock_db.execute.return_value.scalars.return_value.all.return_value = mock_orders
             
-            result = await identify_billable_orders(tenant="test-tenant")
+            # Import and test the actual function logic
+            flow_module = reload_flow_module()
+            
+            result = await flow_module.identify_billable_orders(tenant="test-tenant")
             
             assert "billable_orders_found" in result or "orders_identified" in result
 
     @pytest.mark.asyncio
     async def test_generate_invoices_success(self):
         """Test successful invoice generation."""
-        with patch('flows.business_operations_flow.get_session') as mock_session, \
-             patch('flows.business_operations_flow.InvoiceGeneratorService') as mock_service:
-            
-            # Mock database session
-            mock_db = AsyncMock()
-            mock_session.return_value.__aenter__.return_value = mock_db
-            
-            # Mock invoice generator service
-            mock_generator = AsyncMock()
-            mock_service.return_value = mock_generator
-            mock_generator.generate_daily_invoices.return_value = {
-                "invoices_generated": 5,
-                "total_amount_cents": 15000,
-                "invoice_ids": ["inv-1", "inv-2", "inv-3", "inv-4", "inv-5"]
-            }
-            
-            result = await generate_invoices(tenant="test-tenant")
-            
-            assert "invoices_generated" in result or "generation_status" in result
+    @pytest.mark.asyncio
+    @patch('flows.business_operations_flow.InvoiceGeneratorService')
+    @patch('flows.business_operations_flow.get_session')
+    @patch('flows.business_operations_flow.get_run_logger')
+    async def test_generate_invoices_success(self, mock_logger, mock_session, mock_service):
+        """Test successful invoice generation."""
+        # Mock logger
+        mock_logger.return_value = MagicMock()
+        
+        # Mock database session
+        mock_db = AsyncMock()
+        mock_session.return_value.__aenter__.return_value = mock_db
+        
+        # Mock invoice generator service
+        mock_generator = AsyncMock()
+        mock_service.return_value = mock_generator
+        mock_generator.generate_daily_invoices.return_value = {
+            "invoices_generated": 5,
+            "total_amount_cents": 15000,
+            "invoice_ids": ["inv-1", "inv-2", "inv-3", "inv-4", "inv-5"]
+        }
+        
+        # Mock billable orders data
+        billable_orders = [
+            {"order_id": "order_1", "amount": 250.00},
+            {"order_id": "order_2", "amount": 300.00}
+        ]
+        
+        # Import and test the actual function logic
+        flow_module = reload_flow_module()
+        
+        result = await flow_module.generate_invoices(billable_orders=billable_orders, tenant="test-tenant")
+        
+        assert "invoices_generated" in result or "generation_status" in result
 
     @pytest.mark.asyncio
     async def test_validate_invoices_success(self):

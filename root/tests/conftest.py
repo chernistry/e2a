@@ -28,6 +28,9 @@ from httpx import AsyncClient, ASGITransport
 # Set environment variables BEFORE importing any app modules
 os.environ.update({
     "APP_ENV": "test",
+    "PREFECT_API_URL": "",
+    "PREFECT_DISABLE_API": "true",
+    "PREFECT_LOGGING_LEVEL": "ERROR",
     "DATABASE_URL": "postgresql+asyncpg://postgres:postgres@127.0.0.1:54322/postgres",
     "DIRECT_URL": "postgresql+asyncpg://postgres:postgres@127.0.0.1:54322/postgres",
     "REDIS_URL": "redis://localhost:6379/1",
@@ -597,3 +600,44 @@ def reset_metrics():
     yield
     # Metrics reset would go here if needed
     pass
+
+
+# ==== PREFECT MOCKING FIXTURES ==== #
+
+
+@pytest.fixture(autouse=True)
+def mock_prefect():
+    """Mock Prefect decorators and functions to avoid API connections."""
+    def mock_task(*args, **kwargs):
+        def decorator(func):
+            return func
+        return decorator
+    
+    def mock_flow(*args, **kwargs):
+        def decorator(func):
+            return func
+        return decorator
+    
+    def mock_get_run_logger():
+        logger = MagicMock()
+        logger.info = MagicMock()
+        logger.warning = MagicMock()
+        logger.error = MagicMock()
+        logger.debug = MagicMock()
+        return logger
+    
+    with patch('prefect.task', mock_task), \
+         patch('prefect.flow', mock_flow), \
+         patch('prefect.get_run_logger', mock_get_run_logger):
+        yield
+
+
+@pytest.fixture
+def mock_prefect_logger():
+    """Mock Prefect logger for testing."""
+    logger = MagicMock()
+    logger.info = MagicMock()
+    logger.warning = MagicMock()
+    logger.error = MagicMock()
+    logger.debug = MagicMock()
+    return logger
