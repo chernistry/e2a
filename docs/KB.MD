@@ -113,6 +113,233 @@ cd root
 ### Overview
 The Octup E²A system provides **systematic AI-powered exception processing** with **guaranteed completeness**, **automatic reprocessing**, and **comprehensive monitoring**. The architecture ensures no data is lost in incomplete states and provides full visibility into processing health.
 
+### High-Level Data Flow
+
+```mermaid
+flowchart TD
+    subgraph "Data Sources"
+        SHOPIFY_MOCK[Shopify Mock API<br/>Demo Order Events]
+        WMS[WMS System<br/>Pick/Pack Events<br/>Schema Ready]
+        CARRIER[Carrier APIs<br/>Shipping Events<br/>Schema Ready]
+    end
+    
+    subgraph "E²A Platform"
+        INGEST[Event Ingestion<br/>POST /ingest/events<br/>Idempotency + DLQ]
+        EVENT_PROCESSOR[Event Processor Flow<br/>15min intervals<br/>Order Analysis + AI + SLA]
+        BUSINESS_OPS[Business Operations Flow<br/>Daily intervals<br/>Billing + Reporting]
+    end
+    
+    subgraph "Outputs"
+        EXCEPTIONS[Exception Records<br/>+ AI Analysis]
+        INVOICES[Generated Invoices<br/>+ Adjustments]
+        DASHBOARD[Real-time Dashboard<br/>Live Metrics]
+        REPORTS[Business Analytics<br/>Metrics & Trends]
+    end
+    
+    SHOPIFY_MOCK --> INGEST
+    WMS --> INGEST
+    CARRIER --> INGEST
+    
+    INGEST --> EVENT_PROCESSOR
+    EVENT_PROCESSOR --> EXCEPTIONS
+    EVENT_PROCESSOR --> BUSINESS_OPS
+    BUSINESS_OPS --> INVOICES
+    BUSINESS_OPS --> REPORTS
+    
+    EXCEPTIONS --> DASHBOARD
+    INVOICES --> DASHBOARD
+    REPORTS --> DASHBOARD
+    
+    style SHOPIFY_MOCK fill:#4caf50
+    style WMS fill:#e1f5fe
+    style CARRIER fill:#e1f5fe
+    style EVENT_PROCESSOR fill:#e8f5e8
+    style BUSINESS_OPS fill:#f3e5f5
+    style EXCEPTIONS fill:#e8f5e8
+    style INVOICES fill:#e8f5e8
+    style DASHBOARD fill:#fff3e0
+    style REPORTS fill:#f3e5f5
+```
+
+### System Components
+
+```mermaid
+graph TD
+    subgraph "Ingress & API Layer"
+        API[FastAPI Service<br/>Port 8000]
+        DASHBOARD_UI[Next.js Dashboard<br/>Port 3000]
+    end
+    
+    subgraph "Processing Layer"
+        ORDER_ANALYZER[Order Analyzer Service<br/>AI + Rule-based Detection]
+        SLA_ENGINE[SLA Engine<br/>Real-time Breach Detection]
+        AI_ANALYST[AI Exception Analyst<br/>OpenRouter Integration]
+        AI_RESOLUTION[AI Automated Resolution<br/>Smart Resolution Attempts]
+        PREFECT_SERVER[Prefect Server<br/>Port 4200]
+    end
+    
+    subgraph "Prefect Flows (Simplified Architecture)"
+        EVENT_FLOW[Event Processor Flow<br/>15min intervals<br/>Order Analysis + AI + SLA]
+        BUSINESS_FLOW[Business Operations Flow<br/>Daily intervals<br/>Billing + Reporting]
+    end
+    
+    subgraph "Storage Layer"
+        SUPABASE[(Supabase/PostgreSQL<br/>Port 54322)]
+        REDIS[(Redis<br/>Caching & Sessions)]
+        DLQ[Dead Letter Queue<br/>Failed Event Recovery]
+    end
+    
+    subgraph "External Integrations"
+        SHOPIFY_MOCK[Shopify Mock API<br/>Port 8090<br/>Demo Data Generator]
+        OPENROUTER[OpenRouter API<br/>AI Model Access]
+    end
+    
+    subgraph "Observability"
+        PROMETHEUS[Prometheus Metrics<br/>Performance Monitoring]
+        SUPABASE_STUDIO[Supabase Studio<br/>Port 54323<br/>Database Management]
+    end
+    
+    API --> ORDER_ANALYZER
+    API --> SLA_ENGINE
+    API --> AI_ANALYST
+    API --> AI_RESOLUTION
+    
+    PREFECT_SERVER --> EVENT_FLOW
+    PREFECT_SERVER --> BUSINESS_FLOW
+    
+    EVENT_FLOW --> ORDER_ANALYZER
+    EVENT_FLOW --> SLA_ENGINE
+    EVENT_FLOW --> AI_ANALYST
+    EVENT_FLOW --> AI_RESOLUTION
+    EVENT_FLOW --> SUPABASE
+    
+    BUSINESS_FLOW --> SUPABASE
+    
+    API --> REDIS
+    API --> DLQ
+    API --> SUPABASE
+    SHOPIFY_MOCK --> API
+    AI_ANALYST --> OPENROUTER
+    AI_RESOLUTION --> OPENROUTER
+    
+    API --> PROMETHEUS
+    DASHBOARD_UI --> API
+    SUPABASE --> SUPABASE_STUDIO
+```
+
+### Data Flow Sequence
+
+```mermaid
+sequenceDiagram
+    participant Source as Shopify Mock API<br/>(Demo Events)
+    participant API as FastAPI<br/>Ingest Endpoint
+    participant Redis as Redis<br/>(Idempotency)
+    participant DB as Database<br/>(Supabase)
+    participant EventFlow as Event Processor Flow<br/>(15min intervals)
+    participant AI as AI Services<br/>(Circuit Breaker)
+    participant BusinessFlow as Business Operations Flow<br/>(Daily)
+    participant Dashboard as Dashboard<br/>(Real-time)
+
+    Note over Source,Dashboard: Event Ingestion & Async Processing
+    Source->>API: POST /ingest/events<br/>order_created with problems
+    API->>Redis: Check idempotency
+    Redis-->>API: Not processed
+    API->>DB: Store OrderEvent record
+    API-->>Source: 200 OK (fast response)
+    
+    Note over EventFlow,Dashboard: Background Processing (15min intervals)
+    EventFlow->>DB: Query recent OrderEvents
+    EventFlow->>EventFlow: Analyze orders for problems
+    EventFlow->>DB: Create ExceptionRecords
+    EventFlow->>AI: Analyze exceptions (with circuit breaker)
+    AI-->>EventFlow: AI analysis results
+    EventFlow->>DB: Update exceptions with AI analysis
+    EventFlow->>EventFlow: Evaluate SLA breaches
+    EventFlow->>DB: Create SLA exceptions
+    EventFlow-->>Dashboard: Real-time metrics update
+    
+    Note over BusinessFlow,Dashboard: Daily Business Operations
+    BusinessFlow->>DB: Monitor order fulfillment
+    BusinessFlow->>DB: Generate invoices for completed orders
+    BusinessFlow->>DB: Validate billing accuracy
+    BusinessFlow->>DB: Process adjustments
+    BusinessFlow-->>Dashboard: Business metrics update
+```
+
+### Business Process Pipeline
+
+```mermaid
+flowchart LR
+    subgraph "Event Sources"
+        E1[order_created<br/>with problems]
+        E2[order_paid]
+        E3[pick_completed]
+        E4[pack_completed]
+        E5[ship_label_printed]
+        E6[order_fulfilled]
+        E7[order_delivered]
+    end
+    
+    subgraph "Event Processor Flow (15min intervals)"
+        MONITOR[Monitor Recent<br/>Order Events]
+        ANALYZE[Analyze Orders<br/>for Problems]
+        SLA_CHECK[Evaluate SLA<br/>Breaches]
+        AI_ANALYSIS[AI Exception<br/>Analysis with Circuit Breaker]
+        RESOLUTION[Attempt Automated<br/>Resolution]
+    end
+    
+    subgraph "Business Operations Flow (Daily)"
+        FULFILLMENT[Monitor Order<br/>Fulfillment Progress]
+        BILLING[Generate Invoice<br/>Records]
+        VALIDATE[Validate Invoice<br/>Accuracy]
+        ADJUST[Process Billing<br/>Adjustments]
+        REPORTS[Generate Business<br/>Analytics]
+    end
+    
+    subgraph "Outputs"
+        EXCEPTIONS[Exception Records<br/>with AI Analysis]
+        INVOICES[Invoice Records<br/>with Adjustments]
+        ANALYTICS[Business Metrics<br/>& Reports]
+        ALERTS[Real-time Alerts<br/>& Notifications]
+    end
+    
+    E1 --> MONITOR
+    E2 --> MONITOR
+    E3 --> MONITOR
+    E4 --> MONITOR
+    E5 --> MONITOR
+    E6 --> FULFILLMENT
+    E7 --> FULFILLMENT
+    
+    MONITOR --> ANALYZE
+    ANALYZE --> SLA_CHECK
+    SLA_CHECK --> AI_ANALYSIS
+    AI_ANALYSIS --> RESOLUTION
+    RESOLUTION --> EXCEPTIONS
+    
+    FULFILLMENT --> BILLING
+    BILLING --> VALIDATE
+    VALIDATE --> ADJUST
+    ADJUST --> INVOICES
+    REPORTS --> ANALYTICS
+    
+    EXCEPTIONS --> ALERTS
+    EXCEPTIONS --> ANALYTICS
+    INVOICES --> ANALYTICS
+    
+    style E1 fill:#4caf50
+    style E2 fill:#e3f2fd
+    style E3 fill:#e3f2fd
+    style E4 fill:#e3f2fd
+    style E5 fill:#e3f2fd
+    style E6 fill:#e3f2fd
+    style E7 fill:#e3f2fd
+    style EXCEPTIONS fill:#e8f5e8
+    style INVOICES fill:#e8f5e8
+    style ANALYTICS fill:#f3e5f5
+    style ALERTS fill:#fff3e0
+```
+
 ### Core Principles
 1. **Single Responsibility**: Each service has one clear purpose
 2. **No Overlap**: Services don't duplicate functionality
