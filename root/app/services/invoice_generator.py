@@ -91,8 +91,9 @@ class InvoiceGeneratorService:
                 # Generate invoice number
                 invoice_number = await self._generate_invoice_number(db, tenant)
                 
-                # Create invoice
-                amount_cents = int(float(total_amount) * 100)
+                # Calculate amount from billable operations (ignore passed total_amount)
+                amount_cents = compute_amount_cents(billable_ops, tenant)
+                logger.info(f"Calculated 3PL service fees: {amount_cents} cents for operations {billable_ops}")
                 
                 invoice = Invoice(
                     tenant=tenant,
@@ -146,35 +147,56 @@ class InvoiceGeneratorService:
             
             # Build line items section
             line_items_section = ""
-            subtotal = 0.0
+            product_subtotal = 0.0
             if line_items:
-                line_items_section = "\nLINE ITEMS:\n"
+                line_items_section = "\nPRODUCT LINE ITEMS:\n"
                 for item in line_items:
                     sku = item.get('sku', 'N/A')
                     qty = item.get('quantity', 1)
                     price = float(item.get('price', 0))
                     line_total = qty * price
-                    subtotal += line_total
+                    product_subtotal += line_total
                     line_items_section += f"  • {sku} - Qty: {qty} × ${price:.2f} = ${line_total:.2f}\n"
                 
-                # Add subtotal and tax breakdown
-                tax_amount = (invoice.amount_cents / 100) - subtotal
-                line_items_section += f"\nSubtotal: ${subtotal:.2f}\n"
-                if tax_amount > 0:
-                    line_items_section += f"Tax/Fees: ${tax_amount:.2f}\n"
+                line_items_section += f"\nProduct Subtotal: ${product_subtotal:.2f}\n"
             
-            # Invoice content with line items
+            # Add 3PL service charges
+            service_charges_section = "\n3PL SERVICE CHARGES:\n"
+            billable_ops = invoice.billable_ops or {}
+            service_total = 0.0
+            
+            # Get billing rates (should match compute_amount_cents)
+            pick_fee = 0.30  # $0.30 per pick
+            pack_fee = 0.20  # $0.20 per pack  
+            label_fee = 0.15 # $0.15 per label
+            
+            if billable_ops.get("pick", 0) > 0:
+                pick_charge = billable_ops["pick"] * pick_fee
+                service_total += pick_charge
+                service_charges_section += f"  • Pick Operations: {billable_ops['pick']} × ${pick_fee:.2f} = ${pick_charge:.2f}\n"
+            
+            if billable_ops.get("pack", 0) > 0:
+                pack_charge = billable_ops["pack"] * pack_fee
+                service_total += pack_charge
+                service_charges_section += f"  • Pack Operations: {billable_ops['pack']} × ${pack_fee:.2f} = ${pack_charge:.2f}\n"
+            
+            if billable_ops.get("label", 0) > 0:
+                label_charge = billable_ops["label"] * label_fee
+                service_total += label_charge
+                service_charges_section += f"  • Label Operations: {billable_ops['label']} × ${label_fee:.2f} = ${label_charge:.2f}\n"
+            
+            service_charges_section += f"\nService Charges Subtotal: ${service_total:.2f}\n"
+            
+            # Invoice content with both product line items and service charges
             invoice_content = f"""INVOICE {invoice.invoice_number}
             
 Order ID: {invoice.order_id}
 Customer: {customer_email}
 Date: {invoice.invoice_date.strftime('%Y-%m-%d')}
 Due Date: {invoice.due_date.strftime('%Y-%m-%d') if invoice.due_date else 'N/A'}
-{line_items_section}
-Amount: ${invoice.amount_cents/100:.2f} {invoice.currency}
+{line_items_section}{service_charges_section}
+TOTAL AMOUNT: ${invoice.amount_cents/100:.2f} {invoice.currency}
 Status: {invoice.status}
-
-Billable Operations: {invoice.billable_ops}
 """
             
             # Save as text file

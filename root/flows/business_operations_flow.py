@@ -221,12 +221,11 @@ async def generate_invoices(
                 invoice_data = {
                     "order_id": order_id,
                     "customer_email": order_info.get("customer", {}).get("email", ""),
-                    "total_amount": float(order_info.get("total_price", 0)),
                     "currency": order_info.get("currency", "USD"),
                     "line_items": order_info.get("line_items", [])
                 }
                 
-                logger.info(f"Invoice data for order {order_id}: ${invoice_data['total_amount']:.2f} {invoice_data['currency']}")
+                logger.info(f"Processing invoice for order {order_id} - will calculate 3PL service fees")
                 
                 invoice = await invoice_service.generate_invoice(
                     tenant=tenant,
