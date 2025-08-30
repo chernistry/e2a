@@ -151,6 +151,7 @@ services:
       - ../app:/app/app
       - ../flows:/app/flows
       - ../prompts:/app/prompts
+      - ../data/invoices:/app/data/invoices
     depends_on:
       - prefect-server
       - api

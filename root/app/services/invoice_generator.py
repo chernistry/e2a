@@ -111,12 +111,92 @@ class InvoiceGeneratorService:
                 await db.refresh(invoice)
                 
                 logger.info(f"Generated invoice {invoice_number} for order {order_id}: ${amount_cents/100:.2f}")
+                
+                # Generate invoice file if enabled
+                from app.settings import settings
+                logger.info(f"🔍 Checking invoice file generation - GENERATE_INVOICE_FILES: {settings.GENERATE_INVOICE_FILES}")
+                if settings.GENERATE_INVOICE_FILES:
+                    logger.info(f"🔍 Triggering invoice file generation for invoice {invoice_number}")
+                    await self._generate_invoice_file(invoice, customer_email, line_items or [])
+                else:
+                    logger.info(f"🔍 Invoice file generation disabled in settings")
+                
                 return invoice
                 
             except Exception as e:
                 logger.error(f"Failed to generate invoice for order {order_id}: {e}")
                 await db.rollback()
                 return None
+    
+    async def _generate_invoice_file(self, invoice: Invoice, customer_email: str, line_items: List) -> None:
+        """Generate invoice text file."""
+        logger.info(f"🔍 Invoice file generation called for invoice {invoice.invoice_number}")
+        
+        try:
+            from app.settings import settings
+            import os
+            
+            logger.info(f"🔍 Invoice file settings - GENERATE_INVOICE_FILES: {settings.GENERATE_INVOICE_FILES}")
+            logger.info(f"🔍 Invoice file settings - INVOICE_FILES_PATH: {settings.INVOICE_FILES_PATH}")
+            
+            # Ensure directory exists
+            logger.info(f"🔍 Creating directory: {settings.INVOICE_FILES_PATH}")
+            os.makedirs(settings.INVOICE_FILES_PATH, exist_ok=True)
+            logger.info(f"✅ Directory created/verified: {settings.INVOICE_FILES_PATH}")
+            
+            # Build line items section
+            line_items_section = ""
+            subtotal = 0.0
+            if line_items:
+                line_items_section = "\nLINE ITEMS:\n"
+                for item in line_items:
+                    sku = item.get('sku', 'N/A')
+                    qty = item.get('quantity', 1)
+                    price = float(item.get('price', 0))
+                    line_total = qty * price
+                    subtotal += line_total
+                    line_items_section += f"  • {sku} - Qty: {qty} × ${price:.2f} = ${line_total:.2f}\n"
+                
+                # Add subtotal and tax breakdown
+                tax_amount = (invoice.amount_cents / 100) - subtotal
+                line_items_section += f"\nSubtotal: ${subtotal:.2f}\n"
+                if tax_amount > 0:
+                    line_items_section += f"Tax/Fees: ${tax_amount:.2f}\n"
+            
+            # Invoice content with line items
+            invoice_content = f"""INVOICE {invoice.invoice_number}
+            
+Order ID: {invoice.order_id}
+Customer: {customer_email}
+Date: {invoice.invoice_date.strftime('%Y-%m-%d')}
+Due Date: {invoice.due_date.strftime('%Y-%m-%d') if invoice.due_date else 'N/A'}
+{line_items_section}
+Amount: ${invoice.amount_cents/100:.2f} {invoice.currency}
+Status: {invoice.status}
+
+Billable Operations: {invoice.billable_ops}
+"""
+            
+            # Save as text file
+            filename = f"{invoice.invoice_number}.txt"
+            filepath = os.path.join(settings.INVOICE_FILES_PATH, filename)
+            
+            logger.info(f"🔍 Writing invoice file to: {filepath}")
+            
+            with open(filepath, 'w') as f:
+                f.write(invoice_content)
+            
+            # Verify file was created
+            if os.path.exists(filepath):
+                file_size = os.path.getsize(filepath)
+                logger.info(f"✅ Invoice file created successfully: {filepath} ({file_size} bytes)")
+            else:
+                logger.error(f"❌ Invoice file not found after creation: {filepath}")
+            
+        except Exception as e:
+            logger.error(f"❌ Failed to generate invoice file for invoice {invoice.invoice_number}: {e}")
+            import traceback
+            logger.error(f"❌ Full traceback: {traceback.format_exc()}")
     
     async def generate_invoices_for_completed_orders(
         self, 

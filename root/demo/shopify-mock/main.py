@@ -203,9 +203,63 @@ async def send_webhook(topic: str, order: Dict):
                 headers={"X-Tenant-Id": "demo-3pl"}
             )
             print(f"Webhook sent: {topic} for order {order['name']} - Status: {response.status_code}")
+            
+            # Send additional fulfillment events based on order status
+            if topic == "orders/create" and order.get('fulfillment_status') in ['fulfilled', 'shipped', 'delivered']:
+                await send_fulfillment_events(order)
                 
     except Exception as e:
         print(f"Webhook failed: {e}")
+
+
+async def send_fulfillment_events(order: Dict):
+    """Send fulfillment events based on order status."""
+    fulfillment_status = order.get('fulfillment_status', 'pending')
+    
+    # Base fulfillment events for completed orders
+    events_to_send = []
+    
+    if fulfillment_status in ['fulfilled', 'shipped', 'delivered']:
+        events_to_send.extend([
+            ("order_paid", {"payment_method": "card"}),
+            ("pick_completed", {"picker": "worker"}),
+            ("pack_completed", {"packer": "worker"}),
+            ("ship_label_printed", {"tracking": f"TRACK{order['id']}"})
+        ])
+    
+    if fulfillment_status in ['fulfilled', 'shipped', 'delivered']:
+        events_to_send.append(("order_fulfilled", {"status": "completed"}))
+    
+    if fulfillment_status in ['shipped', 'delivered']:
+        events_to_send.append(("package_shipped", {"carrier": "UPS"}))
+    
+    if fulfillment_status == 'delivered':
+        events_to_send.append(("delivered", {"delivery_date": datetime.now().isoformat()}))
+    
+    # Send each fulfillment event
+    for event_type, payload in events_to_send:
+        await asyncio.sleep(1)  # Small delay between events
+        
+        event_payload = {
+            "event_id": f"shopify_{event_type}_{order['id']}",
+            "event_type": event_type,
+            "source": "shopify",
+            "tenant": "demo-3pl",
+            "occurred_at": datetime.now().isoformat(),
+            "order_id": order['name'],
+            "data": payload
+        }
+        
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    f"{OCTUP_API_URL}/ingest/events",
+                    json=event_payload,
+                    headers={"X-Tenant-Id": "demo-3pl"}
+                )
+                print(f"Fulfillment event sent: {event_type} for order {order['name']} - Status: {response.status_code}")
+        except Exception as e:
+            print(f"Fulfillment event failed: {e}")
 
 
 async def send_batch_webhook(events: List[Dict]):

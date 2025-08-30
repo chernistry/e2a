@@ -96,6 +96,10 @@ class Settings(BaseSettings):
     KAGGLE_DATASET_SLUG: str = "/data/dataset"
     DATASET_EVENTS_DIR: str = "./data/events"
     
+    # --► INVOICE FILE GENERATION
+    GENERATE_INVOICE_FILES: bool = True
+    INVOICE_FILES_PATH: str = "/app/data/invoices"
+    
     # --► SECURITY LIMITS
     MAX_REQUEST_BODY_BYTES: int = 1_048_576
     

@@ -123,7 +123,7 @@ async def identify_billable_orders(
         
         # Find fulfilled orders without invoices
         fulfilled_orders_query = text("""
-            SELECT oe.order_id
+            SELECT DISTINCT oe.order_id
             FROM order_events oe
             WHERE oe.tenant = :tenant
             AND oe.event_type IN ('order_fulfilled', 'package_shipped', 'delivered')
@@ -132,7 +132,6 @@ async def identify_billable_orders(
                 SELECT 1 FROM invoices i 
                 WHERE i.tenant = :tenant AND i.order_id = oe.order_id
             )
-            GROUP BY oe.order_id
         """)
         
         result = await db.execute(
@@ -142,9 +141,22 @@ async def identify_billable_orders(
         
         billable_orders = []
         for row in result:
+            # Get the order_created event payload for this order (contains full order data)
+            payload_query = text("""
+                SELECT payload FROM order_events 
+                WHERE tenant = :tenant AND order_id = :order_id 
+                AND event_type = 'order_created'
+                ORDER BY created_at DESC LIMIT 1
+            """)
+            payload_result = await db.execute(
+                payload_query,
+                {"tenant": tenant, "order_id": row.order_id}
+            )
+            payload_row = payload_result.fetchone()
+            
             billable_orders.append({
                 "order_id": row.order_id,
-                "payload": {}  # Simplified - just track order IDs for billing
+                "payload": payload_row.payload if payload_row else {}
             })
         
         logger.info(f"Identified {len(billable_orders)} billable orders for tenant {tenant}")
