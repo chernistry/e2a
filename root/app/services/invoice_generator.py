@@ -36,6 +36,88 @@ class InvoiceGeneratorService:
         """Initialize invoice generator service."""
         pass
     
+    async def generate_invoice(
+        self,
+        tenant: str,
+        order_id: str,
+        customer_email: str = "",
+        total_amount: float = 0.0,
+        currency: str = "USD",
+        line_items: List = None,
+        **kwargs
+    ) -> Optional[Invoice]:
+        """
+        Generate a single invoice for an order.
+        
+        Args:
+            tenant: Tenant identifier
+            order_id: Order identifier
+            customer_email: Customer email address
+            total_amount: Total amount for the invoice
+            currency: Currency code
+            line_items: List of line items
+            **kwargs: Additional parameters
+            
+        Returns:
+            Generated invoice or None if failed
+        """
+        from app.storage.db import get_session
+        
+        async with get_session() as db:
+            try:
+                # Check if invoice already exists
+                existing = await self._check_existing_invoice(db, tenant, order_id)
+                if existing:
+                    logger.info(f"Invoice already exists for order {order_id}")
+                    return existing
+                
+                # Get order events for billable operations calculation
+                events_query = select(OrderEvent).where(
+                    and_(
+                        OrderEvent.tenant == tenant,
+                        OrderEvent.order_id == order_id
+                    )
+                )
+                result = await db.execute(events_query)
+                events = result.scalars().all()
+                
+                if not events:
+                    logger.warning(f"No events found for order {order_id}")
+                    return None
+                
+                # Calculate billable operations
+                billable_ops = self._calculate_billable_operations(events)
+                
+                # Generate invoice number
+                invoice_number = await self._generate_invoice_number(db, tenant)
+                
+                # Create invoice
+                amount_cents = int(float(total_amount) * 100)
+                
+                invoice = Invoice(
+                    tenant=tenant,
+                    order_id=order_id,
+                    invoice_number=invoice_number,
+                    billable_ops=billable_ops,
+                    amount_cents=amount_cents,
+                    currency=currency,
+                    status="PENDING",
+                    invoice_date=dt.datetime.utcnow(),
+                    due_date=dt.datetime.utcnow() + dt.timedelta(days=30)
+                )
+                
+                db.add(invoice)
+                await db.commit()
+                await db.refresh(invoice)
+                
+                logger.info(f"Generated invoice {invoice_number} for order {order_id}: ${amount_cents/100:.2f}")
+                return invoice
+                
+            except Exception as e:
+                logger.error(f"Failed to generate invoice for order {order_id}: {e}")
+                await db.rollback()
+                return None
+    
     async def generate_invoices_for_completed_orders(
         self, 
         db: AsyncSession,
